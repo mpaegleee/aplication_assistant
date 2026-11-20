@@ -138,6 +138,16 @@ class Settings(Model):
         return Profile.email_valid(v)
 
 
+class AIConnection(Model):
+    ai_url: str = Field(min_length=8, max_length=1000)
+    ai_key: str = Field(default="", max_length=2000)
+
+    @field_validator("ai_url")
+    @classmethod
+    def address(cls, value):
+        return Settings.ai_address(value)
+
+
 class JobInput(Model):
     title: str = Field(min_length=3, max_length=200)
     company: str = Field(min_length=2, max_length=200)

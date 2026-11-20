@@ -2,9 +2,10 @@
 
 Assistente pessoal para candidaturas no Brasil, com importação de currículo PDF, análise de aderência, revisão, documentos e acompanhamento. Uma pessoa por instalação. Prioridade: Windows 10/11 x64; Docker em Linux para servidor próprio.
 
-**Versão 0.1 para teste local. Nenhum código ou binário foi publicado.** Não anunciar automação universal: LinkedIn e Gupy estão no fluxo assistido. Envio automático implementado apenas por SMTP quando o anúncio pede explicitamente candidatura por e-mail.
+**Versão 0.1.1 para teste local. Nenhum código ou binário foi publicado.** Não anunciar automação universal: LinkedIn e Gupy estão no fluxo assistido. Envio automático implementado apenas por SMTP quando o anúncio pede explicitamente candidatura por e-mail.
 
 - [Guia do usuário](docs/GUIA-DO-USUARIO.md)
+- [Atualização 0.1.1: seleção de provedor e modelos](docs/ATUALIZACAO-0.1.1.md)
 - [Especificação e regras](docs/ESPECIFICACAO.md)
 - [Teste local e roteiro de aceite](docs/TESTE-LOCAL.md)
 - [Arquitetura e operação](docs/ARQUITETURA.md)

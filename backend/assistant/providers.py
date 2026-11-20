@@ -1,0 +1,60 @@
+"""Provedores de protocolo compatível; IDs de modelos vêm do serviço escolhido."""
+
+PROVIDERS = [
+    {
+        "id": "deepseek",
+        "name": "DeepSeek",
+        "url": "https://api.deepseek.com",
+        "local": False,
+        "help": "Use uma chave criada na plataforma DeepSeek. Os modelos são carregados da sua API.",
+        "docs": "https://api-docs.deepseek.com/en/",
+    },
+    {
+        "id": "openai",
+        "name": "OpenAI",
+        "url": "https://api.openai.com/v1",
+        "local": False,
+        "help": "Use uma chave da API OpenAI. A assinatura do ChatGPT não substitui acesso à API.",
+        "docs": "https://developers.openai.com/api/reference/resources/models/methods/list",
+    },
+    {
+        "id": "openrouter",
+        "name": "OpenRouter (vários fornecedores)",
+        "url": "https://openrouter.ai/api/v1",
+        "local": False,
+        "help": "Use a chave OpenRouter, mesmo ao escolher um modelo DeepSeek ou de outro fornecedor.",
+        "docs": "https://openrouter.ai/docs/api/api-reference/models/get-models",
+    },
+    {
+        "id": "groq",
+        "name": "Groq",
+        "url": "https://api.groq.com/openai/v1",
+        "local": False,
+        "help": "Use uma chave da plataforma Groq e selecione um dos modelos retornados.",
+        "docs": "https://console.groq.com/docs/openai",
+    },
+    {
+        "id": "ollama",
+        "name": "Ollama — neste computador",
+        "url": "http://localhost:11434/v1",
+        "local": True,
+        "help": "Requer Ollama aberto neste computador e um modelo já instalado. Uma chave de serviço online não instala modelos no Ollama.",
+        "docs": "https://docs.ollama.com/api/openai-compatibility",
+    },
+    {
+        "id": "lmstudio",
+        "name": "LM Studio — neste computador",
+        "url": "http://localhost:1234/v1",
+        "local": True,
+        "help": "Abra o LM Studio, carregue um modelo e habilite o servidor local na porta 1234.",
+        "docs": "https://lmstudio.ai/docs/developer/openai-compat",
+    },
+    {
+        "id": "custom",
+        "name": "Outro serviço compatível (avançado)",
+        "url": "",
+        "local": False,
+        "help": "Informe o endereço base fornecido pelo serviço. A chave deve pertencer a esse mesmo serviço.",
+        "docs": "",
+    },
+]

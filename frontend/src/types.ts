@@ -114,3 +114,13 @@ export type AppState = {
   running: boolean;
   pdf_imported: boolean;
 };
+
+export type AIProvider = {
+  id: string;
+  name: string;
+  url: string;
+  local: boolean;
+  help: string;
+  docs: string;
+};
+export type AIModel = { id: string; name: string };

@@ -344,7 +344,7 @@ def test_ai_error_and_budget(app, settings, monkeypatch):
 
     monkeypatch.setattr(httpx.Client, "post", fail)
     settings["ai_daily_limit"] = 1
-    with pytest.raises(ValueError, match="consultar"):
+    with pytest.raises(ValueError, match="conectar ao Ollama"):
         AI(app.state.store).call(settings, "test", {})
     with pytest.raises(ValueError, match="Limite"):
         AI(app.state.store).call(settings, "test", {})

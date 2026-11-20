@@ -31,6 +31,7 @@ import {
   Inbox,
 } from "lucide-react";
 import { api } from "./api";
+import { AISettings } from "./AISettings";
 import type {
   AppState,
   Profile,
@@ -554,7 +555,7 @@ function App() {
         <footer>
           Application Assistant{" "}
           <span>Feito para tornar a busca por emprego mais humana.</span>
-          <span>v0.1 · teste local</span>
+          <span>v0.1.1 · teste local</span>
         </footer>
       </div>
       {toast && (
@@ -1800,108 +1801,13 @@ function SettingsPage({ state, act, busy }: Common) {
         }}
       >
         {tab === "ai" && (
-          <>
-            <div className="panel-heading">
-              <div>
-                <h2>A inteligência é sua escolha</h2>
-                <p>
-                  Conecte um serviço compatível com Chat Completions ou use
-                  Ollama local.
-                </p>
-              </div>
-              <SlidersHorizontal size={21} />
-            </div>
-            <Field
-              label="Endereço da API"
-              hint="Informe a base incluindo /v1. Para Ollama local: http://localhost:11434/v1"
-            >
-              <input
-                type="url"
-                required
-                value={s.ai_url}
-                onChange={(e) => change("ai_url", e.target.value)}
-              />
-            </Field>
-            <Field
-              label="Identificador do modelo"
-              hint="Use o nome exato informado pelo seu provedor ou exibido em ollama list."
-            >
-              <input
-                value={s.ai_model}
-                onChange={(e) => change("ai_model", e.target.value)}
-                placeholder="Nome do modelo"
-              />
-            </Field>
-            <Field
-              label="Chave da API"
-              hint={
-                s.ai_key_configured
-                  ? "Já existe uma chave salva. Deixe vazio para manter."
-                  : "Ollama local normalmente não exige chave."
-              }
-            >
-              <input
-                type="password"
-                autoComplete="new-password"
-                value={s.ai_key}
-                onChange={(e) => change("ai_key", e.target.value)}
-              />
-            </Field>
-            {s.ai_key_configured && (
-              <button
-                type="button"
-                className="text-button"
-                onClick={() =>
-                  act(async () => {
-                    await api("/settings/clear-secret", "POST", {
-                      name: "ai_key",
-                    });
-                    change("ai_key_configured", false);
-                    change("ai_key", "");
-                  }, "Chave removida.")
-                }
-              >
-                Remover chave salva
-              </button>
-            )}
-            <Field label="Máximo de chamadas de IA por dia">
-              <input
-                type="number"
-                min={1}
-                max={1000}
-                value={s.ai_daily_limit}
-                onChange={(e) =>
-                  change("ai_daily_limit", Number(e.target.value))
-                }
-              />
-            </Field>
-            <Toggle
-              label="Autorizo enviar meu perfil e as vagas ao endpoint escolhido"
-              hint="Mesmo com a aplicação local, provedores externos recebem os dados usados na análise e podem cobrar pelas chamadas."
-              checked={s.ai_consent}
-              onChange={(v) => change("ai_consent", v)}
-            />
-            <div className="notice">
-              O modelo precisa aceitar respostas JSON. A aplicação não exige uma
-              conta ou serviço do desenvolvedor.
-            </div>
-            <div className="button-row">
-              <button
-                type="button"
-                className="secondary"
-                disabled={busy}
-                onClick={() =>
-                  act(async () => {
-                    await api("/settings", "PUT", payload());
-                    await api("/ai/test", "POST");
-                  }, "Conexão com IA validada.")
-                }
-              >
-                <RefreshCw size={16} />
-                Salvar e testar conexão
-              </button>
-            </div>
-          </>
+          <AISettings
+            settings={s}
+            update={(values) => setS((x) => ({ ...x, ...values }))}
+            save={() => api("/settings", "PUT", payload())}
+            act={act}
+            busy={busy}
+          />
         )}
         {tab === "automation" && (
           <>

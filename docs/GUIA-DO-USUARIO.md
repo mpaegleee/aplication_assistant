@@ -11,11 +11,22 @@ Se recebeu o código para desenvolvimento em vez do pacote portátil, instale Py
 A primeira versão inicia **pausada**, em **modo de aprovação**. Não há candidatura nem e-mail enviado só por abrir a aplicação.
 
 ## Configurar a IA
-Abra Configurações → Inteligência artificial. Informe o endereço base da API compatível com Chat Completions, incluindo `/v1`, o identificador exato do modelo e a chave, se necessária. O modelo precisa suportar resposta JSON. A aplicação não exige provedor específico; APIs nativas com outro protocolo não são compatíveis diretamente nesta versão.
+1. Abra Configurações → Inteligência artificial.
+2. Em **Onde você usa a IA?**, selecione o serviço onde criou sua chave: DeepSeek, OpenAI, OpenRouter, Groq, Ollama ou LM Studio. O endereço é preenchido automaticamente.
+3. Cole a chave desse serviço. Se você usa um modelo DeepSeek pelo OpenRouter, selecione **OpenRouter** e use a chave OpenRouter.
+4. Clique **Carregar modelos disponíveis** e escolha na lista. Os identificadores são retornados pelo serviço, não nomes adivinhados ou fixados no programa. Em catálogos grandes, use o campo de busca.
+5. Autorize o uso do perfil com esse serviço e clique **Salvar e testar conexão**. Só a lista não garante compatibilidade; o teste verifica uma resposta JSON.
+6. Ajuste o limite diário conforme necessário. O teste e tentativas de compatibilidade contam nesse limite. A listagem de modelos não conta no limite de análises e não envia seu perfil.
 
-Para Ollama, instale e inicie o serviço, baixe um modelo adequado e informe `http://localhost:11434/v1`. O nome deve corresponder ao exibido em `ollama list`. A chave geralmente fica vazia. Modelos menores podem falhar na estrutura ou na análise: erros são apresentados e não liberam envio. A qualidade e velocidade dependem do equipamento.
+**Ollama e LM Studio são programas locais:** precisam estar abertos, com um modelo instalado/carregado e seu servidor habilitado. Usar uma chave de um serviço online não instala esse modelo no Ollama. Se a conexão local falhar, abra o programa correspondente ou escolha o serviço online onde criou a chave.
 
-Autorize o uso dos dados pelo endpoint escolhido e clique **Salvar e testar conexão**. O teste conta no limite diário. Com provedor externo, perfil e descrição da vaga saem do computador, mesmo com aplicativo local. A chave não é enviada junto desses dados nem retornada pela API de configurações. Campo vazio mantém a chave anterior; use a ação própria para removê-la.
+A lista não baixa modelos e não escolhe um modelo pago automaticamente. Modelos locais podem exigir memória e processamento significativos, conforme a escolha. O funcionamento e a qualidade precisam ser avaliados no seu equipamento.
+
+Com provedor externo, perfil e descrição da vaga saem do computador, mesmo com aplicativo local. A chave não é enviada no conteúdo da análise nem retornada pela API de configurações. Campo vazio mantém a chave anterior somente se o endereço continuar o mesmo; ao mudar o endereço, informe a chave correspondente. Há uma ação própria para remover chave salva.
+
+**Configuração avançada:** selecione Outro serviço compatível para informar uma base diferente ou outra porta. Use Informar modelo manualmente apenas se o serviço não listar modelos ou se tiver confirmado o identificador. O protocolo precisa ser compatível com Chat Completions. A aplicação adapta os parâmetros de tokens/formato quando o provedor indica incompatibilidade, mas continua exigindo JSON válido.
+
+**Mensagens de erro:** chave ausente/inválida (401), acesso recusado (403), saldo insuficiente informado pelo provedor (402), modelo/endereço não encontrado (404), limitação/cota (429), indisponibilidade do serviço (5xx), tempo esgotado ou serviço local fechado. Erros não exibem sua chave nem repetem o conteúdo privado retornado pelo provedor.
 
 ## Importar o PDF do LinkedIn
 No LinkedIn, exporte seu perfil como PDF usando a opção disponível no seu perfil. Importe o arquivo em Meu perfil. Ele deve conter texto selecionável, ter até 10 MB e até 40 páginas. PDFs de imagens precisam de OCR em outra ferramenta; PDFs protegidos não são aceitos.

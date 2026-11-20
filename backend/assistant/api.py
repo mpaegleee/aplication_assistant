@@ -11,7 +11,8 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import Field
 from pypdf import PdfReader
 from filelock import FileLock, Timeout
-from .models import Model, Profile, Settings, JobInput, AREAS
+from .models import Model, Profile, Settings, JobInput, AREAS, AIConnection
+from .providers import PROVIDERS
 from .store import Store, now
 from .engine import Engine, TERMINAL
 from .ai import AI
@@ -102,7 +103,7 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
 
     app = FastAPI(
         title="Application Assistant",
-        version="0.1.0",
+        version="0.1.1",
         lifespan=lifespan,
         docs_url=None,
         redoc_url=None,
@@ -191,7 +192,7 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
 
     @app.get("/api/health")
     def health():
-        return {"ok": True, "version": "0.1.0"}
+        return {"ok": True, "version": "0.1.1"}
 
     @app.get("/api/session")
     def session(request: Request):
@@ -259,7 +260,8 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
             data = payload.model_dump()
             for field in ["ai_key", "smtp_password"]:
                 if not data[field]:
-                    data[field] = old[field]
+                    if field != "ai_key" or data["ai_url"] == old["ai_url"]:
+                        data[field] = old[field]
             store.put("settings", data)
         return {"ok": True}
 
@@ -360,6 +362,19 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
                     "A IA não extraiu fatos verificáveis. Confira o texto e adicione fatos manualmente."
                 )
             return draft
+
+    @app.get("/api/ai/providers", dependencies=[Depends(auth)])
+    def providers():
+        return {"providers": PROVIDERS}
+
+    @app.post("/api/ai/models", dependencies=[Depends(auth)])
+    def list_models(payload: AIConnection):
+        saved = engine.settings()
+        key = payload.ai_key or (
+            saved["ai_key"] if payload.ai_url == saved["ai_url"] else ""
+        )
+        draft = {**saved, "ai_url": payload.ai_url, "ai_key": key}
+        return {"models": AI(store).models(draft)}
 
     @app.post("/api/ai/test", dependencies=[Depends(auth)])
     def test_ai():
