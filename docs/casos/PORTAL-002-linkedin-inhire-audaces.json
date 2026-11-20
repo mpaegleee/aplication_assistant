@@ -1,0 +1,180 @@
+{
+  "id": "PORTAL-002",
+  "received_date": "2026-11-20",
+  "status": "registered_from_user_evidence_not_executed",
+  "evidence": {
+    "source": "Dois links, três capturas e descrição do fluxo enviados pelo usuário nesta conversa",
+    "screenshots_saved_as_files": false,
+    "live_navigation_verified": false
+  },
+  "vacancy": {
+    "company": "Audaces",
+    "title": "Especialista em Governança de Projetos (PMO)",
+    "city": "Florianópolis",
+    "state": "SC",
+    "country": "BR",
+    "modality": "Híbrido",
+    "linkedin_employment_label_observed": "Tempo integral",
+    "salary_question_regime_observed": "CLT",
+    "published_date": null,
+    "application_deadline": null
+  },
+  "links": {
+    "linkedin_listing": "https://www.linkedin.com/jobs/view/4486515588/",
+    "inhire_external_landing": "https://audaces.inhire.app/vagas/599763e7-c9d1-4a6a-a32b-ec0352aaebe9/especialista-em-governanca-de-projetos-pmo?source=linkedin",
+    "application_form_full_url": null,
+    "privacy_policy_url": null
+  },
+  "identifiers": {
+    "linkedin_job_id": "4486515588",
+    "inhire_job_id": "599763e7-c9d1-4a6a-a32b-ec0352aaebe9",
+    "tenant_host": "audaces.inhire.app",
+    "derivation": "Identificadores extraídos dos links fornecidos; não comprova disponibilidade nem envio."
+  },
+  "flow_classification": {
+    "type": "external_direct_application_form",
+    "destination_platform": "inhire",
+    "authentication_required_in_reported_flow": false,
+    "account_creation_required_in_reported_flow": false,
+    "platform_wide_auth_requirement_verified": false,
+    "form_presentation_mode": "unknown_modal_or_navigation"
+  },
+  "observed_flow": [
+    {
+      "step": 1,
+      "screenshot": 1,
+      "platform": "linkedin",
+      "url": "https://www.linkedin.com/jobs/view/4486515588/",
+      "screen": "Detalhe da vaga",
+      "action_label": "Candidatar-se",
+      "submission_type": "external",
+      "observations": [
+        "Respostas gerenciadas fora do LinkedIn.",
+        "Híbrido, Florianópolis/SC, tempo integral.",
+        "A pergunta Concluiu sua candidatura? não comprova submissão no portal externo."
+      ]
+    },
+    {
+      "step": 2,
+      "screenshot": 2,
+      "platform": "inhire",
+      "url": "https://audaces.inhire.app/vagas/599763e7-c9d1-4a6a-a32b-ec0352aaebe9/especialista-em-governanca-de-projetos-pmo?source=linkedin",
+      "screen": "Página pública da vaga Audaces",
+      "action_label": "Candidatar-se para a vaga",
+      "observations": [
+        "Descrição e modalidade visíveis antes de abrir o formulário."
+      ]
+    },
+    {
+      "step": 3,
+      "screenshot": 3,
+      "platform": "inhire",
+      "url": null,
+      "host_observed": "audaces.inhire.app",
+      "screen": "Formulário direto de candidatura",
+      "action_label": "Candidatar-se para a vaga",
+      "observations": [
+        "Não há campos de senha ou criação de conta visíveis.",
+        "Segundo o usuário, preencher os dados e anexar currículo libera o botão de envio sem cadastro.",
+        "A captura mostra o botão desabilitado com os campos vazios.",
+        "Não foi fornecido o URL completo específico do formulário nem comprovante de envio."
+      ]
+    }
+  ],
+  "form_fields": [
+    {
+      "key": "full_name",
+      "label": "Nome completo",
+      "required": true,
+      "kind": "text",
+      "answer_source": "Nome confirmado do perfil"
+    },
+    {
+      "key": "email",
+      "label": "Seu melhor email",
+      "required": true,
+      "kind": "email",
+      "answer_source": "E-mail confirmado do perfil"
+    },
+    {
+      "key": "phone",
+      "label": "Celular com DDD",
+      "required": true,
+      "kind": "phone_with_country_selector",
+      "observed_country": "BR",
+      "observed_calling_code": "+55",
+      "answer_source": "Celular confirmado, com DDD; normalizar conforme a máscara sem duplicar +55"
+    },
+    {
+      "key": "linkedin_profile_url",
+      "label": "Linkedin",
+      "required": true,
+      "kind": "url",
+      "answer_source": "URL do perfil pessoal confirmada; nunca usar o link da vaga como perfil"
+    },
+    {
+      "key": "hybrid_availability",
+      "label": "Você tem disponibilidade para trabalhar no modelo híbrido em Florianópolis, Santa Catarina, Brasil?",
+      "required": true,
+      "kind": "single_choice",
+      "options": [
+        "Sim",
+        "Não"
+      ],
+      "answer_source": "Disponibilidade explicitamente confirmada para essa modalidade e localidade; não inferir da nota de aderência"
+    },
+    {
+      "key": "resume",
+      "label": "Currículo",
+      "required": true,
+      "kind": "file",
+      "answer_source": "Versão factual do currículo ajustada para essa oportunidade",
+      "accepted_extensions": null,
+      "max_size_bytes": null,
+      "constraints_status": "Não observadas; ícone de informações visível"
+    },
+    {
+      "key": "salary_expectation_clt",
+      "label": "Pretensão salarial como CLT",
+      "required": true,
+      "kind": "currency",
+      "observed_currency": "BRL",
+      "answer_source": "Pretensão CLT confirmada pelo usuário, respeitando o formato do campo; não confundir com salário atual ou mínimo de filtragem"
+    }
+  ],
+  "privacy_notice": {
+    "text_observed": "Ao fornecer seus dados pessoais, você concorda com o que está descrito nesta Política de Privacidade.",
+    "policy_link_visible": true,
+    "explicit_checkbox_visible": false,
+    "policy_content_verified": false
+  },
+  "test_expectations": [
+    "Preservar origem LinkedIn e destino InHire como partes da mesma oportunidade.",
+    "Registrar InHire como família distinta de Gupy; não encaminhar automaticamente ao fluxo de login/cadastro.",
+    "Abrir o formulário pelo botão da página pública e mapear os sete campos obrigatórios observados.",
+    "Preencher apenas dados e respostas confirmados; campos ausentes ou ambíguos geram pendência específica.",
+    "Relacionar a disponibilidade híbrida à cidade da vaga; uma nota alta não autoriza responder Sim.",
+    "Usar a pretensão CLT apropriada, sem inventar valor nem reutilizar automaticamente uma pretensão PJ.",
+    "Anexar a versão correta do currículo e verificar que o upload concluiu e foi aceito pelo formulário.",
+    "Verificar formatos, tamanho de arquivo, máscaras e validações na execução real; não adivinhar essas restrições pelas capturas.",
+    "Considerar formulário preenchido ou botão habilitado como pronto para enviar, nunca como enviado.",
+    "Registrar candidatura confirmada somente após evidência final do portal; falha ambígua após envio impede reenvio automático.",
+    "Deduplicar pela vaga InHire identificada no link, preservando parâmetros de origem para rastreabilidade.",
+    "Validar a política exibida e eventuais verificações adicionais antes de habilitar envio automático para esse fluxo."
+  ],
+  "not_observed": [
+    "Formulário com dados válidos e botão habilitado (relatado, sem captura dessa condição)",
+    "Restrições de formato e tamanho do currículo",
+    "Upload concluído",
+    "Mensagem de sucesso e/ou identificador da candidatura",
+    "Retorno por e-mail",
+    "Comportamento em candidatura duplicada",
+    "Eventual CAPTCHA, confirmação adicional ou mudança de fluxo"
+  ],
+  "test_execution": {
+    "executed": false,
+    "credentials_received": false,
+    "personal_data_entered": false,
+    "application_submitted": false
+  }
+}
