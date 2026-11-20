@@ -1,0 +1,116 @@
+{
+  "id": "PORTAL-001",
+  "received_date": "2026-11-20",
+  "status": "registered_from_user_evidence_not_executed",
+  "evidence": {
+    "source": "Links e três capturas enviados pelo usuário nesta conversa",
+    "screenshots_saved_as_files": false,
+    "live_navigation_verified": false
+  },
+  "vacancy": {
+    "company": "Essentia Group",
+    "title": "Scrum Master - Presencial",
+    "city": "Palhoça",
+    "state": "SC",
+    "country": "BR",
+    "modality": "Presencial",
+    "contract_label_observed": "Efetivo",
+    "contract_mapping_to_CLT_verified": false,
+    "published_date_observed": "2026-10-14",
+    "application_deadline_observed": "2026-12-02",
+    "accepts_pcd_label_observed": true
+  },
+  "links": {
+    "linkedin_listing": "https://www.linkedin.com/jobs/view/4476691267/",
+    "gupy_external_landing": "https://essentiagroup.gupy.io/job/eyJqb2JJZCI6MTI2NzMyMDEsInNvdXJjZSI6ImxpbmtlZGluIn0=?jobBoardSource=linkedin",
+    "gupy_login_full_url": null,
+    "post_login_url": null
+  },
+  "identifiers": {
+    "linkedin_job_id": "4476691267",
+    "gupy_job_id": "12673201",
+    "gupy_link_payload_decoded": {
+      "jobId": 12673201,
+      "source": "linkedin"
+    },
+    "derivation": "Payload Base64 do link fornecido, decodificado localmente; não comprova disponibilidade da vaga nem URL final."
+  },
+  "observed_flow": [
+    {
+      "step": 1,
+      "screenshot": 1,
+      "platform": "linkedin",
+      "url": "https://www.linkedin.com/jobs/view/4476691267/",
+      "screen": "Detalhe da vaga",
+      "action_label": "Candidatar-se",
+      "submission_type": "external",
+      "observations": [
+        "Respostas gerenciadas fora do LinkedIn.",
+        "O LinkedIn pergunta Concluiu sua candidatura? com Sim/Não; essa pergunta não confirma inscrição na Gupy."
+      ]
+    },
+    {
+      "step": 2,
+      "screenshot": 2,
+      "platform": "gupy",
+      "url": "https://essentiagroup.gupy.io/job/eyJqb2JJZCI6MTI2NzMyMDEsInNvdXJjZSI6ImxpbmtlZGluIn0=?jobBoardSource=linkedin",
+      "screen": "Página pública da vaga na empresa",
+      "action_label": "Candidatar-se",
+      "observations": [
+        "Título, local, modalidade e datas visíveis.",
+        "Há uma segunda ação Candidatar-se antes da autenticação."
+      ]
+    },
+    {
+      "step": 3,
+      "screenshot": 3,
+      "platform": "gupy",
+      "url": null,
+      "host_observed": "essentiagroup.gupy.io",
+      "screen": "Entrar com sua conta",
+      "observed_fields": [
+        "E-mail ou CPF",
+        "Senha"
+      ],
+      "observed_actions": [
+        "Acessar conta",
+        "Entrar sem senha",
+        "Google",
+        "LinkedIn",
+        "Esqueceu sua senha?",
+        "Criar conta"
+      ],
+      "observations": [
+        "O URL completo desta tela não foi fornecido.",
+        "Formulários e etapas após autenticação ainda não observados."
+      ]
+    }
+  ],
+  "test_expectations": [
+    "Preservar origem LinkedIn e destino Gupy como atributos distintos da mesma oportunidade.",
+    "Reconhecer o caminho externo; não tratar como candidatura simplificada do LinkedIn.",
+    "Reconhecer a página pública intermediária e a segunda ação Candidatar-se.",
+    "Preservar o link original e os parâmetros de origem para rastreabilidade.",
+    "Cobrir futuramente a identidade Gupy em link /job/ com payload codificado, além de links /jobs/ numéricos.",
+    "Manter uma única candidatura para o mesmo jobId Gupy, independentemente de futura origem duplicada.",
+    "Reconhecer autenticação necessária e permitir retomada na vaga após login pelo usuário.",
+    "Não marcar envio por clique no LinkedIn, abertura da Gupy, chegada ao login ou resposta Sim no rastreador do LinkedIn.",
+    "Exigir evidência final do portal para registrar candidatura confirmada.",
+    "Rever disponibilidade e prazo antes de qualquer teste futuro com envio."
+  ],
+  "not_observed": [
+    "Autenticação concluída",
+    "Fluxo de criação de conta",
+    "Eventual CAPTCHA/MFA",
+    "Campos do perfil e histórico profissional",
+    "Perguntas específicas da vaga",
+    "Upload de currículo",
+    "Ação final de envio",
+    "Comprovante e identificador da candidatura"
+  ],
+  "test_execution": {
+    "executed": false,
+    "credentials_received": false,
+    "application_submitted": false
+  }
+}

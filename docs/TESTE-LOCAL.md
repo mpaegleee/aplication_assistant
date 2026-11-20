@@ -42,3 +42,7 @@ Cadastre fontes RSS/JSON/JobPosting que você esteja autorizado a consumir e per
 
 ## Relatar problemas
 Informe sistema operacional, versão, ação, resultado esperado e mensagem exibida. Não publique chave, senha, currículo, arquivo de dados, e-mail privado ou `vault.key`. O painel não guarda logs com credenciais. Reportar resultado de modelos de IA exige remover dados pessoais do exemplo.
+
+## Casos reais fornecidos para os conectores
+
+- [PORTAL-001 — LinkedIn → Essentia Group/Gupy → autenticação](casos/PORTAL-001-linkedin-gupy-essentia.json): Scrum Master - Presencial, Palhoça/SC. Evidência recebida em 20/11/2026; fluxo documentado até o login, sem navegação de validação nem envio de candidatura. Etapas posteriores ainda não observadas.
