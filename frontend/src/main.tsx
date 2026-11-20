@@ -32,6 +32,8 @@ import {
 } from "lucide-react";
 import { api } from "./api";
 import { AISettings } from "./AISettings";
+import { AutomationPanel, RunSummary } from "./Automation";
+import { editableJob, editableSettings } from "./types";
 import type {
   AppState,
   Profile,
@@ -54,6 +56,8 @@ const statusLabels: Record<string, string> = {
   receipt: "Recebimento confirmado",
   selection: "Em seleção",
   interview: "Entrevista",
+  technical: "Teste técnico",
+  manager_interview: "Entrevista com gestor",
   offer: "Proposta",
   rejected: "Não selecionado",
   withdrawn: "Retirada",
@@ -64,6 +68,8 @@ const sentStates = [
   "receipt",
   "selection",
   "interview",
+  "technical",
+  "manager_interview",
   "offer",
   "rejected",
   "withdrawn",
@@ -203,7 +209,15 @@ function App() {
     [password, setPassword] = useState(""),
     [setupToken, setSetupToken] = useState("");
   const refresh = useCallback(async () => {
-    setState(await api<AppState>("/state"));
+    setState(
+      await api<AppState>("/state").then((next) => {
+        if (!next.connectors || !next.metrics)
+          throw new Error(
+            "Atualização aplicada. Encerre a janela do Iniciar.cmd, abra novamente e recarregue esta página.",
+          );
+        return next;
+      }),
+    );
   }, []);
   const notify = (message: string) => {
     setToast(message);
@@ -235,10 +249,15 @@ function App() {
     if (session?.authenticated) refresh().catch((e) => setError(e.message));
   }, [session?.authenticated, refresh]);
   useEffect(() => {
-    if (!state?.running) return;
-    const id = setInterval(() => refresh().catch(() => {}), 3000);
+    if (!session?.authenticated) return;
+    const id = setInterval(
+      () => {
+        if (!document.hidden) refresh().catch(() => {});
+      },
+      state?.running ? 3000 : 30000,
+    );
     return () => clearInterval(id);
-  }, [state?.running, refresh]);
+  }, [session?.authenticated, state?.running, refresh]);
   async function login(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -349,6 +368,7 @@ function App() {
     );
   const nav = [
     ["dashboard", "Visão geral", LayoutDashboard],
+    ["autopilot", "Rotina automática", Play],
     ["profile", "Meu perfil", UserRound],
     ["jobs", "Oportunidades", Search],
     ["applications", "Candidaturas", BriefcaseBusiness],
@@ -359,6 +379,7 @@ function App() {
   ] as const;
   const titles: Record<string, string> = {
     dashboard: "Visão geral",
+    autopilot: "Rotina automática",
     profile: "Meu perfil",
     jobs: "Oportunidades",
     applications: "Minhas candidaturas",
@@ -529,7 +550,15 @@ function App() {
               Processando… As análises de IA podem levar alguns instantes.
             </div>
           )}
-          {page === "dashboard" && <Dashboard state={state} go={setPage} />}
+          {page === "dashboard" && (
+            <>
+              <RunSummary state={state} />
+              <Dashboard state={state} go={setPage} />
+            </>
+          )}
+          {page === "autopilot" && (
+            <AutomationPanel state={state} act={act} busy={busy} go={setPage} />
+          )}
           {page === "profile" && (
             <ProfilePage state={state} act={act} busy={busy} />
           )}
@@ -555,7 +584,7 @@ function App() {
         <footer>
           Application Assistant{" "}
           <span>Feito para tornar a busca por emprego mais humana.</span>
-          <span>v0.1.1 · teste local</span>
+          <span>v0.2.0 · teste local</span>
         </footer>
       </div>
       {toast && (
@@ -1071,6 +1100,35 @@ function ProfilePage({ state, act, busy }: Common) {
             <div className="panel-heading">
               <div>
                 <h2>Fatos do seu currículo</h2>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={busy || !state.profile.facts.length}
+                  onClick={() =>
+                    act(async () => {
+                      const draft = await api<Partial<Profile>>(
+                        "/profile/improve",
+                        "POST",
+                      );
+                      setP((x) => ({ ...x, ...draft, confirmed: false }));
+                      setDraftMessage(
+                        "Sugestão de redação carregada, ainda não salva. Compare com os fatos originais e confirme antes de usar nas candidaturas.",
+                      );
+                    }, "Sugestão pronta para sua revisão. O perfil salvo ainda não foi alterado.")
+                  }
+                >
+                  Melhorar redação com IA
+                </button>
+                {state.profile.confirmed && (
+                  <a
+                    className="text-button"
+                    href="/api/profile/resume"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Baixar currículo padrão
+                  </a>
+                )}
                 <p>
                   Experiências, formação, idiomas e competências verificáveis.
                 </p>
@@ -1106,7 +1164,9 @@ function ProfilePage({ state, act, busy }: Common) {
                   <span className="subtle-pill">
                     {f.source === "pdf"
                       ? "Trecho do PDF"
-                      : "Informado por você"}
+                      : f.evidence
+                        ? "Sugestão de redação — revise"
+                        : "Informado por você"}
                   </span>
                   <button
                     className="icon-btn"
@@ -1122,6 +1182,12 @@ function ProfilePage({ state, act, busy }: Common) {
                     <Trash2 size={16} />
                   </button>
                 </div>
+                {f.source === "manual" && f.evidence && (
+                  <details>
+                    <summary>Texto original para comparação</summary>
+                    <p>{f.evidence}</p>
+                  </details>
+                )}
                 <textarea
                   required
                   aria-label={`Fato profissional ${i + 1}`}
@@ -1144,6 +1210,68 @@ function ProfilePage({ state, act, busy }: Common) {
                 />
               </div>
             ))}
+            <h3>Respostas reutilizáveis para cadastros</h3>
+            <p>
+              Cadastre respostas factuais uma vez. Os conectores de formulários
+              usarão este banco quando forem validados. Estes campos não entram
+              no prompt de análise de vagas.
+            </p>
+            {(p.answers || []).map((answer, index) => (
+              <div className="source-card" key={index}>
+                <Field label="Pergunta ou campo">
+                  <input
+                    required
+                    value={answer.question}
+                    onChange={(e) =>
+                      patch(
+                        "answers",
+                        p.answers.map((x, n) =>
+                          n === index ? { ...x, question: e.target.value } : x,
+                        ),
+                      )
+                    }
+                  />
+                </Field>
+                <Field label="Sua resposta confirmada">
+                  <textarea
+                    required
+                    value={answer.answer}
+                    onChange={(e) =>
+                      patch(
+                        "answers",
+                        p.answers.map((x, n) =>
+                          n === index ? { ...x, answer: e.target.value } : x,
+                        ),
+                      )
+                    }
+                  />
+                </Field>
+                <button
+                  type="button"
+                  className="text-button"
+                  onClick={() =>
+                    patch(
+                      "answers",
+                      p.answers.filter((_, n) => n !== index),
+                    )
+                  }
+                >
+                  Remover resposta
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="secondary"
+              onClick={() =>
+                patch("answers", [
+                  ...(p.answers || []),
+                  { question: "", answer: "" },
+                ])
+              }
+            >
+              Adicionar resposta reutilizável
+            </button>
             <Toggle
               label="Revisei e confirmo a veracidade deste perfil"
               hint="Autoriza usar estes fatos nas candidaturas. Qualquer edição pede nova confirmação."
@@ -1426,6 +1554,15 @@ function JobsPage({
               />
             </Field>
             <div className="form-grid">
+              <Field label="País de contratação">
+                <select
+                  value={editing.country || "BR"}
+                  onChange={(e) => patch("country", e.target.value)}
+                >
+                  <option value="BR">Brasil (confirmado)</option>
+                  <option value="unknown">Não confirmado</option>
+                </select>
+              </Field>
               <Field label="Área profissional">
                 <select
                   required
@@ -1508,6 +1645,9 @@ function JobsPage({
       )}
       {j && (
         <Modal title={j.title} onClose={() => setSelected("")}>
+          {j.pending_reason && (
+            <p className="notice">Pendência da rotina: {j.pending_reason}</p>
+          )}
           <div className="detail-meta">
             <strong>{j.company}</strong>
             <Badge status={j.status} />
@@ -1524,18 +1664,8 @@ function JobsPage({
                 j.status === "uncertain"
               }
               onClick={() => {
-                const {
-                  id,
-                  analysis,
-                  approved,
-                  status,
-                  created_at,
-                  sent_at,
-                  email_eligible,
-                  ...input
-                } = j;
-                setEditing(input);
-                setEditId(id);
+                setEditing(editableJob(j));
+                setEditId(j.id);
                 setSelected("");
               }}
             >
@@ -1682,8 +1812,8 @@ function JobsPage({
             <p className="notice">
               Finalização assistida: abra o site da vaga ou siga as instruções
               do anúncio. O envio SMTP exige destinatário explícito e instruções
-              compatíveis; assunto ou documentos personalizados precisam de
-              preparação manual.
+              compatíveis. Assuntos literais são preservados; documentos extras
+              e instruções ambíguas precisam de preparação manual.
             </p>
           )}
           <details>
@@ -1706,6 +1836,8 @@ function JobsPage({
                   "receipt",
                   "selection",
                   "interview",
+                  "technical",
+                  "manager_interview",
                   "offer",
                   "rejected",
                   "withdrawn",
@@ -1767,7 +1899,7 @@ function SettingsPage({ state, act, busy }: Common) {
   const change = (key: keyof Settings, value: unknown) =>
     setS((x) => ({ ...x, [key]: value }));
   const payload = () => {
-    const { ai_key_configured, smtp_password_configured, ...rest } = s;
+    const rest = editableSettings(s);
     return { ...rest, allowed_domains: split(domains) };
   };
   return (
@@ -1914,7 +2046,10 @@ function SettingsPage({ state, act, busy }: Common) {
             </Field>
             {s.sources.map((source, i) => (
               <div className="source-card" key={i}>
-                <Field label="Nome da fonte">
+                <Field
+                  label="Nome da fonte / empresa"
+                  hint="Em Greenhouse e Lever, use o nome da empresa; ele será usado para identificar as vagas."
+                >
                   <input
                     required
                     value={source.name}
@@ -1928,21 +2063,66 @@ function SettingsPage({ state, act, busy }: Common) {
                     }
                   />
                 </Field>
-                <Field label="Endereço HTTPS do feed">
-                  <input
-                    type="url"
-                    required
-                    value={source.url}
+                <Field label="Tipo de fonte">
+                  <select
+                    value={source.kind || "feed"}
                     onChange={(e) =>
                       change(
                         "sources",
                         s.sources.map((x, n) =>
-                          n === i ? { ...x, url: e.target.value } : x,
+                          n === i
+                            ? { ...x, kind: e.target.value, url: "", board: "" }
+                            : x,
                         ),
                       )
                     }
-                  />
+                  >
+                    <option value="feed">Feed RSS/JSON</option>
+                    <option value="company">
+                      Página pública de empresa (JobPosting)
+                    </option>
+                    <option value="greenhouse">
+                      Quadro público Greenhouse
+                    </option>
+                    <option value="lever">Quadro público Lever</option>
+                  </select>
                 </Field>
+                {["greenhouse", "lever"].includes(source.kind || "") ? (
+                  <Field
+                    label="Identificador do quadro da empresa"
+                    hint="É o nome da empresa no endereço da página de carreiras. O endereço da API será montado automaticamente."
+                  >
+                    <input
+                      required
+                      pattern="[a-zA-Z0-9_-]+"
+                      value={source.board || ""}
+                      onChange={(e) =>
+                        change(
+                          "sources",
+                          s.sources.map((x, n) =>
+                            n === i ? { ...x, board: e.target.value } : x,
+                          ),
+                        )
+                      }
+                    />
+                  </Field>
+                ) : (
+                  <Field label="Endereço HTTPS do feed ou página">
+                    <input
+                      type="url"
+                      required
+                      value={source.url}
+                      onChange={(e) =>
+                        change(
+                          "sources",
+                          s.sources.map((x, n) =>
+                            n === i ? { ...x, url: e.target.value } : x,
+                          ),
+                        )
+                      }
+                    />
+                  </Field>
+                )}
                 <Toggle
                   label="Fonte habilitada"
                   checked={source.enabled}
@@ -2080,6 +2260,127 @@ function SettingsPage({ state, act, busy }: Common) {
               entrega ou leitura.
             </div>
           </>
+        )}
+        {tab === "email" && (
+          <section className="source-card">
+            <h3>Acompanhamento automático por IMAP</h3>
+            <p>
+              Leitura com TLS e senha de aplicativo. Provedores que exigem OAuth
+              ainda não são suportados. Nenhuma mensagem é enviada por este
+              recurso.
+            </p>
+            <Toggle
+              label="Consultar respostas periodicamente"
+              checked={s.imap_enabled}
+              onChange={(v) => change("imap_enabled", v)}
+            />
+            <div className="form-grid">
+              <Field label="Servidor IMAP">
+                <input
+                  value={s.imap_host}
+                  onChange={(e) => change("imap_host", e.target.value)}
+                />
+              </Field>
+              <Field label="Porta TLS">
+                <input
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={s.imap_port}
+                  onChange={(e) => change("imap_port", Number(e.target.value))}
+                />
+              </Field>
+            </div>
+            <Field label="Usuário do e-mail">
+              <input
+                value={s.imap_user}
+                onChange={(e) => change("imap_user", e.target.value)}
+              />
+            </Field>
+            <Field
+              label="Senha de aplicativo IMAP"
+              hint={
+                s.imap_password_configured
+                  ? "Já existe senha salva para esta conta. Vazio mantém se servidor e usuário não mudarem."
+                  : "Consulte o seu provedor para habilitar IMAP com senha de aplicativo."
+              }
+            >
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={s.imap_password}
+                onChange={(e) => change("imap_password", e.target.value)}
+              />
+            </Field>
+            {s.imap_password_configured && (
+              <button
+                type="button"
+                className="text-button"
+                onClick={() =>
+                  act(async () => {
+                    await api("/settings/clear-secret", "POST", {
+                      name: "imap_password",
+                    });
+                    change("imap_password_configured", false);
+                  }, "Senha IMAP removida.")
+                }
+              >
+                Remover senha IMAP salva
+              </button>
+            )}
+            <div className="form-grid">
+              <Field label="Pasta">
+                <input
+                  value={s.imap_folder}
+                  onChange={(e) => change("imap_folder", e.target.value)}
+                />
+              </Field>
+              <Field label="Intervalo (minutos)">
+                <input
+                  type="number"
+                  min={5}
+                  max={1440}
+                  value={s.imap_poll_minutes}
+                  onChange={(e) =>
+                    change("imap_poll_minutes", Number(e.target.value))
+                  }
+                />
+              </Field>
+              <Field label="Mensagens recentes por consulta">
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={s.imap_max_messages}
+                  onChange={(e) =>
+                    change("imap_max_messages", Number(e.target.value))
+                  }
+                />
+              </Field>
+            </div>
+            <Toggle
+              label="Atualizar etapas automaticamente nos casos reconhecidos"
+              hint="Exige resposta da mesma conversa, mesmo remetente da candidatura e etapa identificada. Os demais casos viram sugestões para revisão. Não aceita entrevistas nem faz testes."
+              checked={s.auto_followup}
+              onChange={(v) => change("auto_followup", v)}
+            />
+            <button
+              type="button"
+              className="secondary"
+              disabled={busy}
+              onClick={() =>
+                act(async () => {
+                  await api("/settings", "PUT", payload());
+                  await api("/followups/sync", "POST");
+                }, "Caixa de e-mail consultada.")
+              }
+            >
+              Salvar e consultar respostas
+            </button>
+            {state.mail_status.error && (
+              <p className="notice">{state.mail_status.error}</p>
+            )}
+          </section>
         )}
         {tab === "privacy" && (
           <>
@@ -2336,8 +2637,9 @@ function Followups({ state, act, busy }: Common) {
           />
         </label>
         <div className="notice">
-          A aplicação não está lendo sua caixa postal continuamente. Nenhuma
-          entrevista será aceita nem resposta enviada por este fluxo.
+          Ative a consulta periódica IMAP em Configurações para acompanhar
+          respostas automaticamente. Nenhuma entrevista será aceita nem resposta
+          enviada por este fluxo.
         </div>
       </section>
       <section className="panel">
@@ -2359,7 +2661,11 @@ function Followups({ state, act, busy }: Common) {
                 <small>{f.from}</small>
               </div>
               {f.confirmed ? (
-                <span className="badge green">Confirmado</span>
+                <span className="badge green">
+                  {f.method === "email_thread"
+                    ? "Identificado em resposta"
+                    : "Confirmado"}
+                </span>
               ) : (
                 <button
                   className="secondary"
@@ -2404,6 +2710,8 @@ function Followups({ state, act, busy }: Common) {
                 "receipt",
                 "selection",
                 "interview",
+                "technical",
+                "manager_interview",
                 "offer",
                 "rejected",
                 "withdrawn",

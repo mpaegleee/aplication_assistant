@@ -13,6 +13,8 @@ from pypdf import PdfReader
 from filelock import FileLock, Timeout
 from .models import Model, Profile, Settings, JobInput, AREAS, AIConnection
 from .providers import PROVIDERS
+from .connectors import CONNECTORS
+from .history import record_stage, metrics, STAGES
 from .store import Store, now
 from .engine import Engine, TERMINAL
 from .ai import AI
@@ -56,7 +58,7 @@ class SecretInput(Model):
 
 
 PUBLIC = {"/api/session", "/api/setup", "/api/login", "/api/health"}
-FOLLOWUP_STATES = {
+FOLLOWUP_STATES = STAGES | {
     "receipt",
     "selection",
     "interview",
@@ -99,11 +101,13 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
                 worker.join(timeout=11)
             if engine.thread and engine.thread.is_alive():
                 engine.thread.join(timeout=120)
+            if engine.mail_thread and engine.mail_thread.is_alive():
+                engine.mail_thread.join(timeout=60)
             lock.release()
 
     app = FastAPI(
         title="Application Assistant",
-        version="0.1.1",
+        version="0.2.0",
         lifespan=lifespan,
         docs_url=None,
         redoc_url=None,
@@ -192,7 +196,7 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
 
     @app.get("/api/health")
     def health():
-        return {"ok": True, "version": "0.1.1"}
+        return {"ok": True, "version": "0.2.0"}
 
     @app.get("/api/session")
     def session(request: Request):
@@ -226,7 +230,7 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
     @app.get("/api/state", dependencies=[Depends(auth)])
     def state():
         settings = engine.settings()
-        for field in ["ai_key", "smtp_password"]:
+        for field in ["ai_key", "smtp_password", "imap_password"]:
             settings[field + "_configured"] = bool(settings[field])
             settings[field] = ""
         jobs = store.all("jobs")
@@ -236,6 +240,7 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
             j.pop("submitted_profile", None)
             j["email_eligible"] = email_eligible(j)
         return {
+            "version": "0.2.0",
             "profile": engine.profile(),
             "settings": settings,
             "jobs": jobs,
@@ -244,6 +249,9 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
             "followups": store.all("followups")[:100],
             "areas": AREAS,
             "running": engine.running,
+            "connectors": CONNECTORS,
+            "metrics": metrics(store, engine.settings()),
+            "mail_status": store.get("mail_status", default={}),
             "capabilities": {
                 "linkedin": "assisted",
                 "gupy": "assisted",
@@ -258,16 +266,28 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
         with engine.lock:
             old = engine.settings()
             data = payload.model_dump()
-            for field in ["ai_key", "smtp_password"]:
+            for field in ["ai_key", "smtp_password", "imap_password"]:
                 if not data[field]:
-                    if field != "ai_key" or data["ai_url"] == old["ai_url"]:
+                    same = (
+                        data["ai_url"] == old["ai_url"]
+                        if field == "ai_key"
+                        else all(
+                            data[k] == old[k]
+                            for k in (
+                                ["smtp_host", "smtp_user"]
+                                if field == "smtp_password"
+                                else ["imap_host", "imap_user"]
+                            )
+                        )
+                    )
+                    if same:
                         data[field] = old[field]
             store.put("settings", data)
         return {"ok": True}
 
     @app.post("/api/settings/clear-secret", dependencies=[Depends(auth)])
     def clear_secret(payload: SecretInput):
-        if payload.name not in ["ai_key", "smtp_password"]:
+        if payload.name not in ["ai_key", "smtp_password", "imap_password"]:
             raise ValueError("Segredo inválido.")
         with engine.lock:
             s = engine.settings()
@@ -350,6 +370,11 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
     def pdf_text():
         return {"text": store.get("pdf", default={}).get("text", "")}
 
+    @app.post("/api/profile/improve", dependencies=[Depends(auth)])
+    def improve_profile():
+        with engine.lock:
+            return AI(store).improve_profile(engine.settings(), engine.profile())
+
     @app.post("/api/profile/extract", dependencies=[Depends(auth)])
     def extract():
         with engine.lock:
@@ -418,7 +443,7 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
 
     @app.post("/api/jobs/{id}/analyze", dependencies=[Depends(auth)])
     def analyze(id: str):
-        return engine.analyze(id)
+        return engine.analyze(id, force=True)
 
     @app.post("/api/jobs/{id}/approve", dependencies=[Depends(auth)])
     def approve(id: str):
@@ -449,7 +474,7 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
                 j["resume_snapshot"] = engine.pdf(id).hex()
             if payload.status in FOLLOWUP_STATES and j["status"] not in TERMINAL:
                 raise ValueError("Registre o envio antes de acompanhar o retorno.")
-            j.update(status=payload.status, updated_at=now())
+            record_stage(j, payload.status, "manual")
             store.put("jobs", j, id)
             store.event(id, "Atualização manual: " + payload.note)
             return {"ok": True}
@@ -466,6 +491,30 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
         s["paused"] = True
         store.put("settings", s)
         return {"ok": True}
+
+    @app.get("/api/profile/resume", dependencies=[Depends(auth)])
+    def standard_resume():
+        from .documents import resume_pdf
+
+        profile = engine.profile()
+        if not profile["confirmed"]:
+            raise ValueError("Confirme o perfil antes de gerar o currículo.")
+        return Response(
+            resume_pdf(
+                profile, {"resume_fact_ids": [f["id"] for f in profile["facts"]]}
+            ),
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": 'attachment; filename="Curriculo-padrao.pdf"'
+            },
+        )
+
+    @app.post("/api/followups/sync", dependencies=[Depends(auth)])
+    def sync_mail():
+        result = engine.sync_mail()
+        if result.get("error"):
+            raise ValueError(result["error"])
+        return result
 
     @app.post("/api/followups/import", dependencies=[Depends(auth)])
     async def followup(file: UploadFile = File(...)):
@@ -491,7 +540,7 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
             j = engine.require_job(payload.job_id)
             if j["status"] not in TERMINAL:
                 raise ValueError("Selecione uma candidatura já enviada.")
-            j["status"] = payload.status
+            record_stage(j, payload.status, "eml_confirmation")
             store.put("jobs", j, j["id"])
             f.update(confirmed=True, job_id=j["id"], status=payload.status)
             store.put("followups", f, id)

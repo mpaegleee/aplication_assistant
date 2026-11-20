@@ -1,5 +1,7 @@
 # Guia do usuário — Application Assistant
 
+Para as opções de rotina automática, assuntos de e-mail, leitura IMAP e histórico, consulte também **ATUALIZACAO-0.2.0.md**. O cadastro em portais ainda depende de conector validado.
+
 ## Para que serve
 Organizar sua busca de emprego no Brasil, comparar vagas com seu perfil, preparar currículos e acompanhar candidaturas. Uma pessoa por instalação. O programa é gratuito; serviços de IA escolhidos por você podem cobrar pelo uso.
 
@@ -45,14 +47,14 @@ Confira evidências e lacunas. A IA pode errar; utilize aprovação no período 
 ## Fontes e links
 Autorize domínios exatos em Configurações → Fontes. Adicione feeds RSS ou JSON conhecidos; páginas individuais precisam ter dados estruturados JobPosting. A autorização de um domínio não autoriza subdomínios nem redirecionamentos para outros sites. Redes privadas e HTTP são bloqueados para coleta de vagas.
 
-Itens importados exigem revisão da área antes do envio nesta versão. RSS pode não trazer empresa, modalidade ou descrição completa; complete esses dados. Use a importação manual quando o site não expuser formato suportado.
+Por padrão, itens importados exigem revisão da área. Em Rotina automática, a classificação por regras de cargo pode ser habilitada; casos ambíguos continuam pendentes. RSS pode não trazer empresa, modalidade ou descrição completa; complete esses dados. Use a importação manual quando o site não expuser formato suportado.
 
 **LinkedIn e Gupy não são varridos automaticamente nesta versão.** Prepare a candidatura, abra o link, finalize no portal e registre o envio. Não há login nem senha dessas plataformas dentro do aplicativo. O LinkedIn restringe automação; APIs de candidatura da Gupy usam acessos de empresas, não uma conta comum de candidato.
 
 ## Candidaturas por e-mail
 Configure o servidor SMTP com TLS direto (normalmente porta 465) ou STARTTLS (normalmente 587), remetente, usuário e senha de aplicativo. Use as instruções do seu provedor. Alguns provedores exigem OAuth, ainda não disponível. Nunca desative TLS para fazer funcionar.
 
-O anúncio precisa pedir explicitamente o envio de currículo/candidatura e conter o endereço que você cadastrou como destinatário. Um endereço de contato solto não libera envio. O e-mail gerado é simples, cita cargo e empresa e anexa o PDF factual. Modelos personalizados de assunto/corpo ainda não estão disponíveis. Anúncios que pedem assunto, carta de apresentação, pretensão salarial ou portfólio seguem para finalização assistida. Instruções de não enviar e anúncios encerrados também bloqueiam SMTP.
+O anúncio precisa pedir explicitamente o envio de currículo/candidatura e conter o endereço que você cadastrou como destinatário. Um endereço de contato solto não libera envio. O e-mail gerado é simples, cita cargo e empresa e anexa o PDF factual. Modelos personalizados de assunto/corpo ainda não estão disponíveis. Assuntos literais entre aspas ou em linha Assunto: podem ser preservados automaticamente. Instruções ambíguas, carta de apresentação, pretensão salarial ou portfólio seguem para finalização assistida. Instruções de não enviar e anúncios encerrados também bloqueiam SMTP.
 
 Em modo de aprovação, aprove a candidatura e retome a rotina antes de enviar. Em automático, candidaturas elegíveis por e-mail são processadas sem aprovação individual. Os critérios, limites e configuração de envio continuam obrigatórios. Para ATS, a finalização continua assistida em ambos os modos.
 
@@ -66,7 +68,7 @@ Os limites contam tentativas SMTP e chamadas de IA, inclusive falhas. Só há um
 ## Acompanhamento
 Abra cada candidatura para registrar envio manual, recebimento, seleção, entrevista, proposta ou encerramento, com uma nota. Em Retornos, importe um `.eml` exportado do seu e-mail. A ferramenta sugere vínculo por referências da conversa ou empresa/cargo, e etapa por palavras do conteúdo. Você confirma ambos. Associação ambígua não atualiza automaticamente.
 
-Não há leitura contínua da caixa postal, resposta automática a recrutadores, aceite de convite nem agendamento de entrevista nesta versão. Não receber resposta não equivale a rejeição.
+Há consulta periódica IMAP opcional quando o provedor aceita senha de aplicativo, conforme o guia 0.2.0. Não há resposta automática a recrutadores, aceite de convite nem agendamento de entrevista. Não receber resposta não equivale a rejeição.
 
 ## Dados, backup e recuperação
 Windows: `%LOCALAPPDATA%\Application Assistant`. Linux: `~/.application-assistant`; Docker: volume `/data`. O diretório contém banco SQLite, chave `vault.key` e arquivos de bloqueio. Conteúdos profissionais e credenciais são criptografados; quem acessa banco e chave pode descriptografá-los. Proteja sua conta do sistema e o disco.

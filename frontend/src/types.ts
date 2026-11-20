@@ -18,6 +18,7 @@ export type Profile = {
   minimum_salary: number;
   facts: Fact[];
   confirmed: boolean;
+  answers: { question: string; answer: string }[];
 };
 export type Criterion = {
   grade: number;
@@ -35,6 +36,7 @@ export type Analysis = {
   resume_fact_ids?: string[];
 };
 export type JobInput = {
+  country?: "BR" | "unknown";
   title: string;
   company: string;
   url: string;
@@ -47,6 +49,9 @@ export type JobInput = {
   salary: number | null;
   recipient: string;
   source: string;
+  application_url?: string;
+  email_subject?: string;
+  instructions_reviewed?: boolean;
 };
 export type Job = JobInput & {
   id: string;
@@ -56,8 +61,16 @@ export type Job = JobInput & {
   approved: boolean;
   sent_at?: string;
   email_eligible: boolean;
+  destination?: string;
+  pending_reason?: string;
+  pending_code?: string;
+  origins?: { url: string; platform: string; source: string }[];
 };
 export type Settings = {
+  search_platforms: string[];
+  allowed_destinations: string[];
+  auto_classify_areas: boolean;
+  run_time_limit_minutes: number;
   mode: "review" | "automatic";
   threshold: number;
   minimum_confidence: number;
@@ -76,7 +89,13 @@ export type Settings = {
   ai_consent: boolean;
   ai_key_configured?: boolean;
   allowed_domains: string[];
-  sources: { name: string; url: string; enabled: boolean }[];
+  sources: {
+    name: string;
+    url: string;
+    enabled: boolean;
+    kind?: "feed" | "company" | "greenhouse" | "lever";
+    board?: string;
+  }[];
   smtp_host: string;
   smtp_port: number;
   smtp_security: string;
@@ -85,6 +104,16 @@ export type Settings = {
   smtp_password_configured?: boolean;
   smtp_from: string;
   email_enabled: boolean;
+  imap_enabled: boolean;
+  imap_host: string;
+  imap_port: number;
+  imap_user: string;
+  imap_password: string;
+  imap_password_configured?: boolean;
+  imap_folder: string;
+  imap_poll_minutes: number;
+  imap_max_messages: number;
+  auto_followup: boolean;
 };
 export type Followup = {
   id: string;
@@ -94,6 +123,7 @@ export type Followup = {
   candidates: string[];
   suggested_status: string;
   confirmed: boolean;
+  method?: string;
 };
 export type AppState = {
   profile: Profile;
@@ -105,6 +135,24 @@ export type AppState = {
     id: string;
     status: string;
     started_at: string;
+    found?: number;
+    eligible?: number;
+    pending?: number;
+    duplicates?: number;
+    sources?: {
+      name: string;
+      platform: string;
+      found: number;
+      new: number;
+      duplicates: number;
+      status: string;
+    }[];
+    items?: {
+      job_id: string;
+      stage: string;
+      result: string;
+      destination?: string;
+    }[];
     imported: number;
     analyzed: number;
     sent: number;
@@ -113,6 +161,29 @@ export type AppState = {
   followups: Followup[];
   running: boolean;
   pdf_imported: boolean;
+  connectors: {
+    id: string;
+    name: string;
+    discovery: boolean;
+    submission: boolean;
+    reason: string;
+  }[];
+  metrics: {
+    days: number;
+    applied: number;
+    smtp_accepted: number;
+    reported_manual: number;
+    responses: number;
+    current: Record<string, number>;
+    pending: number;
+    by_destination: Record<string, number>;
+  };
+  mail_status: {
+    last_checked_at?: string;
+    error?: string;
+    imported?: number;
+    updated?: number;
+  };
 };
 
 export type AIProvider = {
@@ -124,3 +195,30 @@ export type AIProvider = {
   docs: string;
 };
 export type AIModel = { id: string; name: string };
+
+export function editableJob(job: Job): JobInput {
+  const keys = [
+    "title",
+    "company",
+    "url",
+    "description",
+    "area",
+    "area_reviewed",
+    "modality",
+    "contract",
+    "location",
+    "salary",
+    "recipient",
+    "source",
+    "country",
+    "application_url",
+    "email_subject",
+    "instructions_reviewed",
+  ] as const;
+  return Object.fromEntries(keys.map((key) => [key, job[key]])) as JobInput;
+}
+export function editableSettings(settings: Settings) {
+  return Object.fromEntries(
+    Object.entries(settings).filter(([key]) => !key.endsWith("_configured")),
+  );
+}

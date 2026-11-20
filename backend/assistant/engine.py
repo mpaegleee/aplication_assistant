@@ -3,11 +3,19 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from .models import Profile, Settings
 from .store import now
-from .matching import hard_blocks, fingerprint, validate_analysis
+from .matching import hard_blocks, fingerprint, validate_analysis, infer_area
 from .ai import AI
-from .sources import canonical_url, public_fetch, read_source
+from .sources import (
+    canonical_url,
+    public_fetch,
+    read_source,
+    read_board,
+    application_identity,
+)
 from .documents import resume_pdf
-from .mail import email_eligible, build_email, smtp_send
+from .mail import email_eligible, build_email, smtp_send, prepare_delivery
+from .connectors import CONNECTORS, platform_for, source_platform, source_address
+from .history import record_stage
 
 TERMINAL = {
     "sent",
@@ -16,6 +24,8 @@ TERMINAL = {
     "receipt",
     "selection",
     "interview",
+    "technical",
+    "manager_interview",
     "offer",
     "rejected",
     "withdrawn",
@@ -30,6 +40,8 @@ class Engine:
         self.running = False
         self.stop = threading.Event()
         self.thread = None
+        self.mail_lock = threading.Lock()
+        self.mail_thread = None
 
     def recover(self):
         # Called only after acquiring the cross-process installation lock.
@@ -58,11 +70,14 @@ class Engine:
             self.store.get("profile", default={})
         ).model_dump()
 
-    def add_job(self, data):
+    def add_job(self, data, origin=None):
         with self.lock:
-            data = dict(data)
+            data = prepare_delivery(data)
             data["url"] = canonical_url(data.get("url", ""))
-            key = data["url"] or "|".join(
+            data["application_url"] = canonical_url(data.get("application_url", ""))
+            key = application_identity(
+                data["application_url"] or data["url"]
+            ) or "|".join(
                 str(data.get(x, "")).lower().strip()
                 for x in ["company", "title", "location"]
             )
@@ -74,8 +89,37 @@ class Engine:
                 "created_at": now(),
                 "analysis": None,
                 "approved": False,
+                "origins": [
+                    origin
+                    or {
+                        "url": data["url"],
+                        "platform": platform_for(data["url"], "company"),
+                        "source": data.get("source", "manual"),
+                    }
+                ],
+                "destination": "email"
+                if email_eligible(data)
+                else platform_for(data.get("application_url") or data["url"]),
             }
             created = self.store.insert("jobs", j, id)
+            if not created:
+                existing = self.store.get("jobs", id)
+                origins = existing.setdefault("origins", [])
+                for item in j["origins"]:
+                    if item not in origins:
+                        origins.append(item)
+                if (
+                    existing["status"] not in TERMINAL
+                    and existing["description"] != data["description"]
+                ):
+                    existing.update(
+                        data,
+                        status="new",
+                        analysis=None,
+                        approved=False,
+                        pending_reason="Descrição atualizada pela fonte; nova análise necessária.",
+                    )
+                self.store.put("jobs", existing, id)
             if created:
                 self.store.event(id, "Oportunidade adicionada.")
             return self.store.get("jobs", id), created
@@ -86,26 +130,45 @@ class Engine:
             raise ValueError("Vaga não encontrada.")
         return j
 
-    def analyze(self, id):
+    def analyze(self, id, force=False):
         with self.lock:
-            j = self.require_job(id)
+            j = prepare_delivery(self.require_job(id))
             p = self.profile()
             s = self.settings()
             if j["status"] in TERMINAL or j["status"] == "sending":
                 raise ValueError(
                     "Candidatura já enviada, encerrada ou com resultado incerto."
                 )
+            if not j.get("area_reviewed") and s["auto_classify_areas"]:
+                inferred = infer_area(j["title"])
+                if inferred:
+                    j.update(
+                        area=inferred,
+                        area_reviewed=True,
+                        area_review_method="title_rule",
+                    )
+                    self.store.event(id, "Área classificada pelo cargo: " + inferred)
+            current = fingerprint(p, j, s)
+            if not force and (j.get("analysis") or {}).get("fingerprint") == current:
+                return j
             blockers = hard_blocks(p, j)
             j["approved"] = False
             if blockers:
                 j.update(
                     status="blocked",
-                    analysis={"blocks": blockers, "score": None, "confidence": None},
+                    analysis={
+                        "blocks": blockers,
+                        "score": None,
+                        "confidence": None,
+                        "fingerprint": current,
+                    },
                 )
             else:
                 raw = AI(self.store).analyze(s, p, j)
                 analysis = validate_analysis(raw, p, j)
                 analysis["blocks"] = []
+                analysis["threshold_used"] = s["threshold"]
+                analysis["confidence_used"] = s["minimum_confidence"]
                 analysis["fingerprint"] = fingerprint(p, j, s)
                 j["analysis"] = analysis
                 j["status"] = (
@@ -160,6 +223,21 @@ class Engine:
                 raise ValueError(
                     "Candidatura enviada, encerrada ou com resultado incerto; reenvio impedido."
                 )
+            identity = application_identity(
+                j.get("application_url") or j.get("url", "")
+            )
+            if identity and any(
+                other["id"] != id
+                and other["status"] in TERMINAL
+                and application_identity(
+                    other.get("application_url") or other.get("url", "")
+                )
+                == identity
+                for other in self.store.all("jobs")
+            ):
+                raise ValueError(
+                    "Já existe candidatura enviada, encerrada ou incerta para esse destino. Confira o histórico antes de continuar."
+                )
             p, s, a = self.valid_analysis(j)
             if s["paused"]:
                 raise ValueError(
@@ -167,11 +245,13 @@ class Engine:
                 )
             if s["mode"] == "review" and not j.get("approved"):
                 raise ValueError("Aprovação necessária para esta candidatura.")
+            if "email" not in s["allowed_destinations"]:
+                raise ValueError("Destino e-mail não autorizado nas configurações.")
             if not s["email_enabled"] or not s["smtp_host"] or not s["smtp_from"]:
                 raise ValueError("Habilite e configure o envio de e-mail.")
             if not email_eligible(j):
                 raise ValueError(
-                    "Envio assistido: confira o destinatário e as instruções. Assunto, carta ou anexos personalizados precisam de finalização manual."
+                    "Envio assistido: confira destinatário, assunto literal e documentos exigidos pelo anúncio."
                 )
             pdf = resume_pdf(p, a)
             message_id = "<" + secrets.token_hex(16) + "@application-assistant.local>"
@@ -200,7 +280,13 @@ class Engine:
                 raise ValueError(
                     "Resultado do envio incerto. Verifique manualmente; reenvio automático bloqueado."
                 )
-            j.update(status="sent", sent_at=now())
+            j.update(
+                destination="email",
+                pending_reason="",
+                pending_code="",
+                submitted_subject=str(message["Subject"]),
+            )
+            record_stage(j, "sent", "smtp")
             self.store.put("jobs", j, id)
             self.store.event(
                 id,
@@ -220,66 +306,230 @@ class Engine:
         self.thread = threading.Thread(target=self.run, daemon=True)
         self.thread.start()
 
+    def pending(self, job, code, message):
+        if job.get("pending_code") != code or job.get("pending_reason") != message:
+            self.store.event(job["id"], message)
+        job.update(pending_code=code, pending_reason=message)
+        self.store.put("jobs", job, job["id"])
+        return code
+
+    def process(self, job):
+        settings = self.settings()
+        if job["status"] in TERMINAL or job["status"] == "sending":
+            return "already_submitted"
+        if settings["paused"] or self.stop.is_set():
+            return "paused"
+        job = self.analyze(job["id"])
+        if job["status"] == "blocked":
+            return self.pending(job, "blocked", " ".join(job["analysis"]["blocks"]))
+        if job["status"] == "review":
+            return self.pending(
+                job,
+                "below_threshold",
+                "Aderência ou confiança abaixo do limite configurado.",
+            )
+        destination = (
+            "email"
+            if email_eligible(job)
+            else platform_for(job.get("application_url") or job.get("url", ""))
+        )
+        job["destination"] = destination
+        if destination not in settings["allowed_destinations"]:
+            return self.pending(
+                job, "destination_disabled", "Destino não autorizado: " + destination
+            )
+        if destination != "email":
+            return self.pending(
+                job,
+                "connector_unavailable",
+                "Finalização em "
+                + destination
+                + " aguarda conector autenticado validado; não houve envio.",
+            )
+        if not settings["email_enabled"]:
+            return self.pending(
+                job,
+                "email_disabled",
+                "Habilite o envio SMTP para concluir esta candidatura.",
+            )
+        if settings["mode"] == "review" and not job.get("approved"):
+            return self.pending(
+                job,
+                "approval_required",
+                "Esta candidatura aguarda aprovação conforme o modo escolhido.",
+            )
+        self.store.put("jobs", job, job["id"])
+        self.send(job["id"])
+        return "sent"
+
     def run(self):
         run = {
             "id": secrets.token_hex(12),
             "started_at": now(),
             "status": "running",
+            "found": 0,
             "imported": 0,
+            "duplicates": 0,
             "analyzed": 0,
+            "eligible": 0,
             "sent": 0,
+            "pending": 0,
             "errors": [],
+            "items": [],
+            "sources": [],
         }
         self.store.put("runs", run, run["id"])
+        started = time.monotonic()
+        limit = self.settings()["run_time_limit_minutes"] * 60
+
+        def interrupted():
+            return (
+                self.stop.is_set()
+                or self.settings()["paused"]
+                or time.monotonic() - started >= limit
+            )
+
         try:
-            s = self.settings()
-            for source in s["sources"]:
-                if self.stop.is_set() or self.settings()["paused"]:
-                    break
-                if not source["enabled"]:
-                    continue
-                try:
-                    for data in read_source(
-                        public_fetch(source["url"], s["allowed_domains"]), source["url"]
-                    )[: s["max_jobs_per_run"]]:
-                        _, created = self.add_job(data)
-                        run["imported"] += int(created)
-                except Exception:
+            settings = self.settings()
+            capabilities = {c["id"]: c for c in CONNECTORS}
+            for platform in settings["search_platforms"]:
+                if not capabilities[platform]["discovery"]:
                     run["errors"].append(
-                        "Não foi possível importar a fonte: " + source["name"]
+                        capabilities[platform]["name"]
+                        + ": "
+                        + capabilities[platform]["reason"]
                     )
-            pending = [
-                j for j in self.store.all("jobs") if j["status"] in ["new", "ready"]
-            ][: s["max_jobs_per_run"]]
-            for j in pending:
-                if self.stop.is_set() or self.settings()["paused"]:
+            seen = set()
+            for source in settings["sources"]:
+                if interrupted():
                     break
+                platform = source_platform(source)
+                if (
+                    not source["enabled"]
+                    or platform not in settings["search_platforms"]
+                ):
+                    continue
+                if not capabilities[platform]["discovery"]:
+                    continue
+                entry = {
+                    "name": source["name"],
+                    "platform": platform,
+                    "found": 0,
+                    "new": 0,
+                    "duplicates": 0,
+                    "status": "running",
+                }
+                run["sources"].append(entry)
                 try:
-                    if j["status"] == "new":
-                        j = self.analyze(j["id"])
-                        run["analyzed"] += 1
-                    s = self.settings()
-                    if (
-                        j["status"] == "ready"
-                        and (s["mode"] == "automatic" or j.get("approved"))
-                        and s["email_enabled"]
-                        and email_eligible(j)
-                    ):
-                        self.send(j["id"])
-                        run["sent"] += 1
-                except Exception as e:
-                    if isinstance(e, ValueError):
-                        run["errors"].append(str(e)[:500])
-                    else:
-                        run["errors"].append(
-                            "Não foi possível processar uma oportunidade."
+                    address = source_address(source)
+                    allowed = list(settings["allowed_domains"])
+                    if source.get("kind") == "greenhouse":
+                        allowed.append("boards-api.greenhouse.io")
+                    if source.get("kind") == "lever":
+                        allowed.append("api.lever.co")
+                    text = public_fetch(address, allowed)
+                    rows = (
+                        read_board(text, source)
+                        if source.get("kind") in ["greenhouse", "lever"]
+                        else read_source(text, address)
+                    )
+                    for data in rows:
+                        if interrupted() or len(seen) >= settings["max_jobs_per_run"]:
+                            break
+                        entry["found"] += 1
+                        run["found"] += 1
+                        job, created = self.add_job(
+                            data,
+                            {
+                                "url": data.get("url") or address,
+                                "platform": platform,
+                                "source": source["name"],
+                            },
                         )
+                        seen.add(job["id"])
+                        entry["new"] += int(created)
+                        entry["duplicates"] += int(not created)
+                        run["imported"] += int(created)
+                        run["duplicates"] += int(not created)
+                    entry["status"] = "completed"
+                except Exception:
+                    entry["status"] = "failed"
+                    run["errors"].append(
+                        "Falha ao consultar a fonte: " + source["name"]
+                    )
                 self.store.put("runs", run, run["id"])
-                if self.stop.wait(s["interval_seconds"]):
+            jobs = []
+            for job in self.store.all("jobs"):
+                if job["status"] in TERMINAL or job["status"] == "sending":
+                    continue
+                origins = job.get("origins") or [
+                    {"platform": platform_for(job.get("url", ""), "company")}
+                ]
+                if not any(
+                    o["platform"] in settings["search_platforms"] for o in origins
+                ):
+                    continue
+                jobs.append(job)
+                if len(jobs) >= settings["max_jobs_per_run"]:
+                    break
+            for index, job in enumerate(jobs):
+                if interrupted():
+                    break
+                item = {
+                    "job_id": job["id"],
+                    "stage": "analysis",
+                    "result": "processing",
+                    "at": now(),
+                }
+                run["items"].append(item)
+                self.store.put("runs", run, run["id"])
+                try:
+                    result = self.process(job)
+                    latest = self.require_job(job["id"])
+                    run["sent"] += int(result == "sent")
+                    run["pending"] += int(
+                        result not in ["sent", "already_submitted", "paused"]
+                    )
+                    item.update(
+                        result=result,
+                        stage="sent" if result == "sent" else "pending",
+                        destination=latest.get("destination", ""),
+                    )
+                except Exception as exc:
+                    latest = self.require_job(job["id"])
+                    code = (
+                        "uncertain"
+                        if latest["status"] == "uncertain"
+                        else "execution_error"
+                    )
+                    detail = (
+                        str(exc)[:500]
+                        if isinstance(exc, ValueError)
+                        else "Não foi possível processar a oportunidade."
+                    )
+                    self.pending(latest, code, detail)
+                    item.update(result=code, stage="pending")
+                    run["pending"] += 1
+                latest = self.require_job(job["id"])
+                analysis = latest.get("analysis") or {}
+                run["analyzed"] += int(analysis.get("score") is not None)
+                run["eligible"] += int(
+                    analysis.get("score") is not None
+                    and analysis["score"]
+                    >= analysis.get("threshold_used", settings["threshold"])
+                    and analysis.get("confidence", 0)
+                    >= analysis.get("confidence_used", settings["minimum_confidence"])
+                )
+                self.store.put("runs", run, run["id"])
+                if index < len(jobs) - 1 and self.stop.wait(
+                    settings["interval_seconds"]
+                ):
                     break
             run["status"] = (
                 "paused"
                 if self.settings()["paused"] or self.stop.is_set()
+                else "time_limit"
+                if time.monotonic() - started >= limit
                 else "completed"
             )
         except Exception:
@@ -292,10 +542,33 @@ class Engine:
             self.store.put("runs", run, run["id"])
             self.running = False
 
+    def sync_mail(self):
+        if not self.mail_lock.acquire(blocking=False):
+            raise ValueError("Leitura de e-mail já está em andamento.")
+        try:
+            from .mail_sync import sync_mail
+
+            return sync_mail(self.store, self.settings(), self.lock, self.stop)
+        finally:
+            self.mail_lock.release()
+
     def scheduler(self):
         while not self.stop.wait(10):
             s = self.settings()
             local = datetime.now(ZoneInfo(s["timezone"]))
+            mail_state = self.store.get("mail_status", default={})
+            due = (
+                time.time() - mail_state.get("last_poll", 0)
+                >= s["imap_poll_minutes"] * 60
+            )
+            if (
+                s["imap_enabled"]
+                and due
+                and not self.mail_lock.locked()
+                and not (self.mail_thread and self.mail_thread.is_alive())
+            ):
+                self.mail_thread = threading.Thread(target=self.sync_mail, daemon=True)
+                self.mail_thread.start()
             if (
                 s["paused"]
                 or not s["schedule_enabled"]

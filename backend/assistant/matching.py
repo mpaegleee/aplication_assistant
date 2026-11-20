@@ -45,6 +45,10 @@ def fingerprint(profile, job, settings):
                 "location",
                 "salary",
                 "recipient",
+                "country",
+                "application_url",
+                "email_subject",
+                "instructions_reviewed",
             ]
         },
         "policy": {
@@ -59,6 +63,10 @@ def fingerprint(profile, job, settings):
 
 def hard_blocks(p, j):
     b = []
+    if j.get("country", "BR") != "BR":
+        b.append("Confirme que a vaga aceita candidatura no Brasil.")
+    if j.get("company") in ["Revisar empresa", "Empresa não informada"]:
+        b.append("Confirme a empresa responsável pela vaga.")
     if not p.get("confirmed"):
         b.append("Confirme seu perfil antes de candidatar.")
     if not p.get("facts"):

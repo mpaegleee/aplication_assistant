@@ -6,29 +6,84 @@ from email.utils import formatdate
 from .matching import normalized
 
 
+def subject_instruction(description):
+    # Only explicit literal subjects. Templates and multi-line instructions require review.
+    patterns = [
+        r'(?:assunto|subject)\s*(?:[:=-]|de)?\s*["“]([^"”\r\n]{1,200})["”]',
+        r"(?:assunto|subject)\s*[:=]\s*([^\r\n]{1,200})",
+    ]
+    matches = []
+    for pattern in patterns:
+        matches.extend(
+            m.group(1).strip() for m in re.finditer(pattern, description, re.I)
+        )
+        if matches:
+            break
+    values = list(dict.fromkeys(matches))
+    if len(values) != 1:
+        return ""
+    value = values[0]
+    if re.search(
+        r"[{}<>\[\]]|seu nome|nome completo|\banex|\benvie|\binforme", normalized(value)
+    ):
+        return ""
+    return value
+
+
+def prepare_delivery(job):
+    job = dict(job)
+    description = job["description"]
+    addresses = list(
+        dict.fromkeys(
+            re.findall(
+                r"[a-zA-Z0-9.!#$%&*+/=?^_`{|}~-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
+                description,
+            )
+        )
+    )
+    if (
+        not job.get("recipient")
+        and len(addresses) == 1
+        and re.search(
+            r"\b(envie|enviar|encaminhe|encaminhar)\b", normalized(description)
+        )
+    ):
+        job["recipient"] = addresses[0]
+    if not job.get("email_subject"):
+        job["email_subject"] = subject_instruction(description)
+    return job
+
+
 def email_eligible(job):
     recipient = job.get("recipient", "")
     description = job.get("description", "")
     text = normalized(description)
-    # Instructions this connector cannot honor require assisted submission.
-    if re.search(
-        r"\b(assunto|subject|carta de apresentacao|pretensao salarial|portfolio)\b",
-        text,
-    ):
+    if re.search(r"\b(carta de apresentacao|pretensao salarial|portfolio)\b", text):
         return False
     if re.search(
         r"\bnao\s+(envie|enviar|encaminhe|encaminhar)|vaga\s+(encerrada|fechada|preenchida)|processo seletivo encerrado",
         text,
     ):
         return False
-    addresses = re.findall(r"[^\s@<>;,]+@[^\s@<>;,]+\.[^\s@<>;,.)]+", description)
+    if re.search(r"\b(assunto|subject)\b", text):
+        required = subject_instruction(description)
+        if not required or job.get("email_subject") != required:
+            return False
+    addresses = list(
+        dict.fromkeys(
+            re.findall(
+                r"[a-zA-Z0-9.!#$%&*+/=?^_`{|}~-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
+                description,
+            )
+        )
+    )
+    if len(addresses) > 1 and not job.get("instructions_reviewed"):
+        return False
     return bool(
         recipient
         and recipient.lower() in [a.lower() for a in addresses]
-        and re.search(
-            r"\b(envie|enviar|encaminhe|encaminhar)\b", normalized(description)
-        )
-        and re.search(r"\b(curriculo|candidatura|cv)\b", normalized(description))
+        and re.search(r"\b(envie|enviar|encaminhe|encaminhar)\b", text)
+        and re.search(r"\b(curriculo|candidatura|cv)\b", text)
     )
 
 
@@ -36,7 +91,7 @@ def build_email(settings, profile, job, pdf, message_id):
     message = EmailMessage()
     message["From"] = settings["smtp_from"]
     message["To"] = job["recipient"]
-    message["Subject"] = "Candidatura: " + job["title"]
+    message["Subject"] = job.get("email_subject") or "Candidatura: " + job["title"]
     message["Date"] = formatdate(localtime=False)
     message["Message-ID"] = message_id
     message.set_content(
@@ -91,6 +146,8 @@ def parse_followup(data, jobs):
             "receipt",
             "selection",
             "interview",
+            "technical",
+            "manager_interview",
             "offer",
             "rejected",
             "uncertain",
@@ -105,12 +162,19 @@ def parse_followup(data, jobs):
         and normalized(j["title"]) in normalized(text)
     ]
     status = "selection"
+    recognized = True
     if re.search(
         r"nao (seguiremos|avancaremos)|não (seguiremos|avançaremos)|outros candidatos|reprovad|não foi selecionad",
         text,
         re.I,
     ):
         status = "rejected"
+    elif re.search(
+        r"teste t[eé]cnico|desafio t[eé]cnico|avalia[cç][aã]o t[eé]cnica", text, re.I
+    ):
+        status = "technical"
+    elif re.search(r"entrevista.{0,50}(gestor|gestora|lideran[cç]a)", text, re.I):
+        status = "manager_interview"
     elif re.search(r"entrevista|interview", text, re.I):
         status = "interview"
     elif re.search(r"proposta de (trabalho|contrata)|carta.proposta", text, re.I):
@@ -119,7 +183,12 @@ def parse_followup(data, jobs):
         r"(recebemos|recebida).{0,40}(candidatura|currículo|curriculo)", text, re.I
     ):
         status = "receipt"
+    else:
+        recognized = False
     return {
+        "recognized": recognized,
+        "matched_by": "thread" if len(exact) == 1 else "text" if candidates else "none",
+        "message_id": str(message.get("Message-ID", ""))[:300],
         "id": secrets.token_hex(12),
         "subject": str(message.get("Subject", ""))[:300],
         "from": str(message.get("From", ""))[:300],

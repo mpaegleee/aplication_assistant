@@ -171,7 +171,7 @@ def main():
             encoding="utf-8",
         )
         manifest = {
-            "version": "0.1.1",
+            "version": "0.2.0",
             "target": "windows-x64",
             "runtime_url": url,
             "runtime_sha256": hashlib.sha256(blob).hexdigest(),
@@ -183,7 +183,7 @@ def main():
             json.dumps(manifest, indent=2), encoding="utf-8"
         )
     zip_path = shutil.make_archive(
-        str(output / "ApplicationAssistant-Windows-Local-0.1.1"),
+        str(output / "ApplicationAssistant-Windows-Local-0.2.0"),
         "zip",
         target.parent,
         target.name,

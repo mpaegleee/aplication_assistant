@@ -5,7 +5,7 @@ from urllib.parse import urlsplit, urljoin, urlunsplit, parse_qsl, urlencode
 from html.parser import HTMLParser
 from defusedxml import ElementTree
 from .models import JobInput
-from .matching import infer_area
+from .matching import infer_area, normalized
 
 MAX_BYTES = 2_000_000
 
@@ -138,6 +138,8 @@ def posting(raw, url):
         location = location[0] if location else {}
     address = location.get("address", {}) if isinstance(location, dict) else {}
     country = address.get("addressCountry", "") if isinstance(address, dict) else ""
+    if isinstance(country, dict):
+        country = country.get("name", "")
     if country and str(country).upper() not in ["BR", "BRASIL", "BRAZIL"]:
         return None
     title = strip_html(raw.get("title", ""))[:200]
@@ -161,6 +163,7 @@ def posting(raw, url):
         if raw.get("jobLocationType") == "TELECOMMUTE"
         else "Não informado",
         source="JobPosting",
+        country="BR" if country else "unknown",
     ).model_dump()
 
 
@@ -168,12 +171,29 @@ def read_source(text, url):
     if text.lstrip().startswith(("[", "{")):
         data = json.loads(text)
         if isinstance(data, list):
-            return [
-                JobInput.model_validate(
-                    {**item, "area_reviewed": False, "source": "JSON"}
-                ).model_dump()
-                for item in data[:100]
-            ]
+            jobs = []
+            for item in data[:100]:
+                if not isinstance(item, dict) or item.get("country", "unknown") not in [
+                    "BR",
+                    "unknown",
+                ]:
+                    continue
+                try:
+                    jobs.append(
+                        JobInput.model_validate(
+                            {
+                                **item,
+                                "area_reviewed": False,
+                                "source": "JSON",
+                                "country": item.get("country", "unknown"),
+                            }
+                        ).model_dump()
+                    )
+                except ValueError:
+                    continue
+            if data and not jobs:
+                raise ValueError("Feed sem vagas válidas para análise no Brasil.")
+            return jobs
         return [j for item in walk_json(data) if (j := posting(item, url))]
     parser = JobPostingParser()
     parser.feed(text)
@@ -205,8 +225,95 @@ def read_source(text, url):
                 description=description,
                 area=infer_area(title),
                 source="RSS",
+                country="unknown",
             ).model_dump()
         )
     if not jobs:
         raise ValueError("Feed sem vagas reconhecidas.")
     return jobs
+
+
+def read_board(text, source):
+    """Adaptadores de leitura documentados; nunca enviam candidaturas."""
+    data = json.loads(text)
+    kind = source.get("kind", "feed")
+    rows = (
+        data.get("jobs", [])
+        if kind == "greenhouse" and isinstance(data, dict)
+        else data
+    )
+    if not isinstance(rows, list):
+        raise ValueError("Quadro de vagas não retornou uma lista.")
+    jobs = []
+    for row in rows[:100]:
+        if not isinstance(row, dict):
+            continue
+        if kind == "greenhouse":
+            title = row.get("title", "")
+            description = strip_html(row.get("content", ""))
+            url = row.get("absolute_url", "")
+            application_url = url
+            location = (row.get("location") or {}).get("name", "")
+        elif kind == "lever":
+            title = row.get("text", "")
+            categories = row.get("categories") or {}
+            description = row.get("descriptionPlain") or strip_html(
+                row.get("description", "")
+            )
+            for item in row.get("lists", []):
+                description += (
+                    "\n"
+                    + str(item.get("text", ""))
+                    + " "
+                    + strip_html(item.get("content", ""))
+                )
+            description += "\n" + strip_html(row.get("additional", ""))
+            url = row.get("hostedUrl", "")
+            application_url = row.get("applyUrl", "") or url
+            location = categories.get("location", "")
+        else:
+            raise ValueError("Tipo de quadro não suportado.")
+        if not url or len(description.strip()) < 20:
+            continue
+        location = str(location)[:150]
+        modality = (
+            "Remoto"
+            if re.search(r"remot[eo]|anywhere|worldwide", location, re.I)
+            or row.get("workplaceType") == "remote"
+            else "Não informado"
+        )
+        jobs.append(
+            JobInput(
+                title=str(title)[:200],
+                company=source["name"],
+                url=url,
+                application_url=application_url,
+                description=description[:40000],
+                location=location,
+                modality=modality,
+                source=kind,
+                country="BR"
+                if re.search(
+                    r"\b(brasil|brazil|sao paulo|rio de janeiro|brasilia|belo horizonte|curitiba|porto alegre|recife|florianopolis|fortaleza|salvador|manaus|vitoria|goiania|campinas)\b",
+                    normalized(location),
+                )
+                else "unknown",
+            ).model_dump()
+        )
+    return jobs
+
+
+def application_identity(url):
+    """Normaliza identificadores públicos conhecidos; URLs genéricas mantêm query significativa."""
+    value = canonical_url(url)
+    parsed = urlsplit(value)
+    host = (parsed.hostname or "").lower()
+    if host == "gupy.io" or host.endswith(".gupy.io"):
+        match = re.search(r"/jobs/(\d+)(?:/|$)", parsed.path)
+        if match:
+            return "gupy:" + match.group(1)
+    if host == "jobs.lever.co" or host.endswith(".jobs.lever.co"):
+        parts = parsed.path.strip("/").split("/")
+        if len(parts) >= 2:
+            return "lever:" + parts[0] + ":" + parts[1]
+    return value

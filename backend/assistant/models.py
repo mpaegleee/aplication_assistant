@@ -1,7 +1,8 @@
 from typing import Literal
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from zoneinfo import ZoneInfo
 from urllib.parse import urlsplit
+from .connectors import PLATFORMS, DESTINATIONS
 import re
 
 AREAS = [
@@ -34,6 +35,11 @@ class Fact(Model):
     source: Literal["pdf", "manual"] = "manual"
 
 
+class SavedAnswer(Model):
+    question: str = Field(min_length=3, max_length=300)
+    answer: str = Field(min_length=1, max_length=2000)
+
+
 class Profile(Model):
     name: str = Field(default="", max_length=150)
     email: str = Field(default="", max_length=254)
@@ -48,6 +54,7 @@ class Profile(Model):
     minimum_salary: float = Field(default=0, ge=0, le=1000000)
     facts: list[Fact] = Field(default_factory=list, max_length=300)
     confirmed: bool = False
+    answers: list[SavedAnswer] = Field(default_factory=list, max_length=100)
 
     @field_validator("areas", "excluded_areas")
     @classmethod
@@ -66,11 +73,31 @@ class Profile(Model):
 
 class Source(Model):
     name: str = Field(min_length=1, max_length=80)
-    url: str = Field(min_length=8, max_length=2000)
+    url: str = Field(default="", max_length=2000)
     enabled: bool = True
+    kind: Literal["feed", "company", "greenhouse", "lever"] = "feed"
+    board: str = Field(default="", max_length=100, pattern=r"^[a-zA-Z0-9_-]*$")
+
+    @model_validator(mode="after")
+    def valid_source(self):
+        if self.kind in ["greenhouse", "lever"] and not self.board:
+            raise ValueError("Informe o identificador do quadro de vagas.")
+        if self.kind not in ["greenhouse", "lever"] and not self.url.startswith(
+            "https://"
+        ):
+            raise ValueError("Informe o endereço HTTPS da fonte.")
+        return self
 
 
 class Settings(Model):
+    search_platforms: list[str] = Field(
+        default_factory=lambda: ["feed", "company", "greenhouse", "lever"], max_length=7
+    )
+    allowed_destinations: list[str] = Field(
+        default_factory=lambda: ["email"], max_length=7
+    )
+    auto_classify_areas: bool = False
+    run_time_limit_minutes: int = Field(default=60, ge=1, le=240)
     mode: Literal["review", "automatic"] = "review"
     threshold: int = Field(default=80, ge=0, le=100)
     minimum_confidence: int = Field(default=85, ge=50, le=100)
@@ -96,6 +123,25 @@ class Settings(Model):
     smtp_password: str = Field(default="", max_length=2000)
     smtp_from: str = Field(default="", max_length=254)
     email_enabled: bool = False
+    imap_enabled: bool = False
+    imap_host: str = Field(default="", max_length=254)
+    imap_port: int = Field(default=993, ge=1, le=65535)
+    imap_user: str = Field(default="", max_length=254)
+    imap_password: str = Field(default="", max_length=2000)
+    imap_folder: str = Field(
+        default="INBOX", min_length=1, max_length=100, pattern=r"^[^\r\n]+$"
+    )
+    imap_poll_minutes: int = Field(default=15, ge=5, le=1440)
+    imap_max_messages: int = Field(default=30, ge=1, le=100)
+    auto_followup: bool = False
+
+    @field_validator("search_platforms", "allowed_destinations")
+    @classmethod
+    def platforms_valid(cls, value, info):
+        choices = PLATFORMS if info.field_name == "search_platforms" else DESTINATIONS
+        if any(x not in choices for x in value):
+            raise ValueError("Plataforma inválida")
+        return list(dict.fromkeys(value))
 
     @field_validator("timezone")
     @classmethod
@@ -149,6 +195,7 @@ class AIConnection(Model):
 
 
 class JobInput(Model):
+    country: Literal["BR", "unknown"] = "BR"
     title: str = Field(min_length=3, max_length=200)
     company: str = Field(min_length=2, max_length=200)
     url: str = Field(default="", max_length=2000)
@@ -163,6 +210,9 @@ class JobInput(Model):
     salary: float | None = Field(default=None, ge=0, le=1000000)
     recipient: str = Field(default="", max_length=254)
     source: str = Field(default="manual", max_length=100)
+    application_url: str = Field(default="", max_length=2000)
+    email_subject: str = Field(default="", max_length=200, pattern=r"^[^\r\n]*$")
+    instructions_reviewed: bool = False
 
     @field_validator("area")
     @classmethod
@@ -176,7 +226,7 @@ class JobInput(Model):
     def recipient_valid(cls, v):
         return Profile.email_valid(v)
 
-    @field_validator("url")
+    @field_validator("url", "application_url")
     @classmethod
     def valid_url(cls, v):
         if v:
