@@ -1,0 +1,48 @@
+name: Validar e empacotar Windows
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+jobs:
+  windows:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Compilar e testar
+        shell: pwsh
+        run: ./packaging/build-windows.ps1
+      - name: Testar inicialização do executável
+        shell: pwsh
+        run: |
+          $env:AA_NO_BROWSER = '1'
+          $env:AA_DATA_DIR = Join-Path $env:RUNNER_TEMP 'aa-smoke'
+          $process = Start-Process 'dist/ApplicationAssistant/ApplicationAssistant.exe' -PassThru
+          try {
+            $ok = $false
+            for ($i = 0; $i -lt 30; $i++) {
+              try { $r = Invoke-RestMethod 'http://127.0.0.1:8765/api/health'; if ($r.ok) { $ok = $true; break } } catch { Start-Sleep -Seconds 1 }
+            }
+            if (-not $ok) { throw 'Executavel nao iniciou.' }
+            $page = Invoke-WebRequest 'http://127.0.0.1:8765/'
+            if ($page.Content -notmatch 'Application Assistant') { throw 'Interface ausente.' }
+          } finally { Stop-Process -Id $process.Id -ErrorAction SilentlyContinue }
+      - name: Gerar instalador
+        shell: pwsh
+        run: '& "C:/Program Files (x86)/Inno Setup 6/ISCC.exe" packaging/installer.iss'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ApplicationAssistant-Windows-0.1.0
+          path: |
+            dist/ApplicationAssistant/
+            dist/ApplicationAssistant-Setup-0.1.0.exe
+          retention-days: 14

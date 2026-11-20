@@ -1,0 +1,116 @@
+export type Fact = {
+  id: string;
+  text: string;
+  evidence: string;
+  source: "pdf" | "manual";
+};
+export type Profile = {
+  name: string;
+  email: string;
+  phone: string;
+  city: string;
+  areas: string[];
+  excluded_areas: string[];
+  roles: string[];
+  modalities: string[];
+  contracts: string[];
+  locations: string[];
+  minimum_salary: number;
+  facts: Fact[];
+  confirmed: boolean;
+};
+export type Criterion = {
+  grade: number;
+  weight: number;
+  fact_ids: string[];
+  job_quote: string;
+  reason: string;
+};
+export type Analysis = {
+  score: number | null;
+  confidence: number | null;
+  criteria?: Record<string, Criterion>;
+  blocks: string[];
+  gaps?: string;
+  resume_fact_ids?: string[];
+};
+export type JobInput = {
+  title: string;
+  company: string;
+  url: string;
+  description: string;
+  area: string;
+  area_reviewed: boolean;
+  modality: string;
+  contract: string;
+  location: string;
+  salary: number | null;
+  recipient: string;
+  source: string;
+};
+export type Job = JobInput & {
+  id: string;
+  status: string;
+  created_at: string;
+  analysis: Analysis | null;
+  approved: boolean;
+  sent_at?: string;
+  email_eligible: boolean;
+};
+export type Settings = {
+  mode: "review" | "automatic";
+  threshold: number;
+  minimum_confidence: number;
+  daily_limit: number;
+  ai_daily_limit: number;
+  max_jobs_per_run: number;
+  interval_seconds: number;
+  paused: boolean;
+  schedule_enabled: boolean;
+  weekdays: number[];
+  time: string;
+  timezone: string;
+  ai_url: string;
+  ai_model: string;
+  ai_key: string;
+  ai_consent: boolean;
+  ai_key_configured?: boolean;
+  allowed_domains: string[];
+  sources: { name: string; url: string; enabled: boolean }[];
+  smtp_host: string;
+  smtp_port: number;
+  smtp_security: string;
+  smtp_user: string;
+  smtp_password: string;
+  smtp_password_configured?: boolean;
+  smtp_from: string;
+  email_enabled: boolean;
+};
+export type Followup = {
+  id: string;
+  subject: string;
+  from: string;
+  excerpt: string;
+  candidates: string[];
+  suggested_status: string;
+  confirmed: boolean;
+};
+export type AppState = {
+  profile: Profile;
+  settings: Settings;
+  jobs: Job[];
+  areas: string[];
+  events: { job_id: string; message: string; at: string }[];
+  runs: {
+    id: string;
+    status: string;
+    started_at: string;
+    imported: number;
+    analyzed: number;
+    sent: number;
+    errors: string[];
+  }[];
+  followups: Followup[];
+  running: boolean;
+  pdf_imported: boolean;
+};

@@ -1,0 +1,176 @@
+from typing import Literal
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from zoneinfo import ZoneInfo
+from urllib.parse import urlsplit
+import re
+
+AREAS = [
+    "Desenvolvimento",
+    "Dados",
+    "Infraestrutura",
+    "Produto e Design",
+    "Comercial",
+    "Marketing",
+    "Financeiro",
+    "Recursos Humanos",
+    "Administrativo",
+    "Operações",
+    "Saúde",
+    "Educação",
+    "Jurídico",
+    "Engenharia",
+    "Outros",
+]
+
+
+class Model(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+
+class Fact(Model):
+    id: str = Field(min_length=1, max_length=80, pattern=r"^[\w-]+$")
+    text: str = Field(min_length=3, max_length=2000)
+    evidence: str = Field(default="", max_length=2000)
+    source: Literal["pdf", "manual"] = "manual"
+
+
+class Profile(Model):
+    name: str = Field(default="", max_length=150)
+    email: str = Field(default="", max_length=254)
+    phone: str = Field(default="", max_length=50)
+    city: str = Field(default="", max_length=150)
+    areas: list[str] = Field(default_factory=list, max_length=20)
+    excluded_areas: list[str] = Field(default_factory=list, max_length=20)
+    roles: list[str] = Field(default_factory=list, max_length=30)
+    modalities: list[str] = Field(default_factory=lambda: ["Remoto"], max_length=3)
+    contracts: list[str] = Field(default_factory=list, max_length=5)
+    locations: list[str] = Field(default_factory=list, max_length=30)
+    minimum_salary: float = Field(default=0, ge=0, le=1000000)
+    facts: list[Fact] = Field(default_factory=list, max_length=300)
+    confirmed: bool = False
+
+    @field_validator("areas", "excluded_areas")
+    @classmethod
+    def areas_valid(cls, value):
+        if any(x not in AREAS for x in value):
+            raise ValueError("Área inválida")
+        return value
+
+    @field_validator("email")
+    @classmethod
+    def email_valid(cls, v):
+        if v and not re.fullmatch(r"[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+", v):
+            raise ValueError("E-mail inválido")
+        return v
+
+
+class Source(Model):
+    name: str = Field(min_length=1, max_length=80)
+    url: str = Field(min_length=8, max_length=2000)
+    enabled: bool = True
+
+
+class Settings(Model):
+    mode: Literal["review", "automatic"] = "review"
+    threshold: int = Field(default=80, ge=0, le=100)
+    minimum_confidence: int = Field(default=85, ge=50, le=100)
+    daily_limit: int = Field(default=10, ge=1, le=100)
+    ai_daily_limit: int = Field(default=50, ge=1, le=1000)
+    max_jobs_per_run: int = Field(default=20, ge=1, le=100)
+    interval_seconds: int = Field(default=15, ge=5, le=600)
+    paused: bool = True
+    schedule_enabled: bool = False
+    weekdays: list[int] = Field(default_factory=lambda: [0, 1, 2, 3, 4], max_length=7)
+    time: str = Field(default="09:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    timezone: str = "America/Sao_Paulo"
+    ai_url: str = Field(default="http://localhost:11434/v1", max_length=1000)
+    ai_model: str = Field(default="", max_length=150)
+    ai_key: str = Field(default="", max_length=2000)
+    ai_consent: bool = False
+    allowed_domains: list[str] = Field(default_factory=list, max_length=100)
+    sources: list[Source] = Field(default_factory=list, max_length=20)
+    smtp_host: str = Field(default="", max_length=254)
+    smtp_port: int = Field(default=465, ge=1, le=65535)
+    smtp_security: Literal["ssl", "starttls"] = "ssl"
+    smtp_user: str = Field(default="", max_length=254)
+    smtp_password: str = Field(default="", max_length=2000)
+    smtp_from: str = Field(default="", max_length=254)
+    email_enabled: bool = False
+
+    @field_validator("timezone")
+    @classmethod
+    def valid_timezone(cls, v):
+        ZoneInfo(v)
+        return v
+
+    @field_validator("weekdays")
+    @classmethod
+    def valid_days(cls, v):
+        if any(d < 0 or d > 6 for d in v):
+            raise ValueError("Dia inválido")
+        return sorted(set(v))
+
+    @field_validator("allowed_domains")
+    @classmethod
+    def domains(cls, v):
+        if any(
+            not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}", d) for d in v
+        ):
+            raise ValueError("Informe domínios, sem protocolo ou caminho")
+        return sorted(set(d.lower() for d in v))
+
+    @field_validator("ai_url")
+    @classmethod
+    def ai_address(cls, v):
+        u = urlsplit(v)
+        if u.username or u.password or u.query or u.fragment or not u.hostname:
+            raise ValueError("Endereço da IA inválido")
+        if u.scheme != "https" and not (
+            u.scheme == "http"
+            and u.hostname in ["localhost", "127.0.0.1", "host.docker.internal"]
+        ):
+            raise ValueError("Use HTTPS; HTTP somente para IA local")
+        return v.rstrip("/")
+
+    @field_validator("smtp_from")
+    @classmethod
+    def sender(cls, v):
+        return Profile.email_valid(v)
+
+
+class JobInput(Model):
+    title: str = Field(min_length=3, max_length=200)
+    company: str = Field(min_length=2, max_length=200)
+    url: str = Field(default="", max_length=2000)
+    description: str = Field(min_length=20, max_length=40000)
+    area: str = ""
+    area_reviewed: bool = False
+    modality: Literal["Remoto", "Híbrido", "Presencial", "Não informado"] = (
+        "Não informado"
+    )
+    contract: str = Field(default="", max_length=50)
+    location: str = Field(default="", max_length=150)
+    salary: float | None = Field(default=None, ge=0, le=1000000)
+    recipient: str = Field(default="", max_length=254)
+    source: str = Field(default="manual", max_length=100)
+
+    @field_validator("area")
+    @classmethod
+    def area_valid(cls, v):
+        if v and v not in AREAS:
+            raise ValueError("Área inválida")
+        return v
+
+    @field_validator("recipient")
+    @classmethod
+    def recipient_valid(cls, v):
+        return Profile.email_valid(v)
+
+    @field_validator("url")
+    @classmethod
+    def valid_url(cls, v):
+        if v:
+            u = urlsplit(v)
+            if u.scheme != "https" or not u.hostname or u.username or u.password:
+                raise ValueError("Use um link HTTPS válido")
+        return v

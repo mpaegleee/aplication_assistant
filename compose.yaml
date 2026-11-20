@@ -1,0 +1,14 @@
+services:
+  assistant:
+    build: .
+    ports:
+      - "127.0.0.1:8765:8765"
+    volumes:
+      - assistant-data:/data
+    environment:
+      AA_SETUP_TOKEN: ${AA_SETUP_TOKEN:?Defina um codigo de configuracao em .env}
+      AA_ALLOWED_HOSTS: ${AA_ALLOWED_HOSTS:-localhost,127.0.0.1}
+      AA_SECURE_COOKIES: ${AA_SECURE_COOKIES:-0}
+    restart: unless-stopped
+volumes:
+  assistant-data:

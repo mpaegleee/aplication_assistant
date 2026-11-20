@@ -1,0 +1,20 @@
+Application Assistant — licença proprietária de uso gratuito (versão de teste)
+Copyright (c) 2026 mpaeglee. Todos os direitos reservados.
+
+O titular autoriza o uso gratuito dos binários oficiais para uso pessoal na busca
+por emprego, incluindo a execução em servidor próprio para uma pessoa por
+instalação. A distribuição gratuita não concede acesso ao código-fonte nem
+transfere direitos de propriedade intelectual.
+
+Não é concedida autorização para revender, sublicenciar, publicar o código-fonte
+ou redistribuir versões modificadas da aplicação. As restrições aplicam-se na
+medida permitida pela legislação aplicável. Dependências de terceiros mantêm
+suas próprias licenças, identificadas nos respectivos avisos.
+
+A versão é fornecida para testes, sem garantia de disponibilidade de serviços de
+terceiros, contratação, entrega de mensagens ou compatibilidade universal com
+portais de emprego. O usuário controla credenciais, provedores e candidaturas.
+Nenhuma cláusula exclui direitos que não possam ser afastados por lei.
+
+O mantenedor deve revisar e aprovar estes termos e os avisos de dependências
+antes de uma distribuição pública. Esta versão local não foi publicada.
