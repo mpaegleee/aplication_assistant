@@ -48,3 +48,5 @@ Informe sistema operacional, versão, ação, resultado esperado e mensagem exib
 - [PORTAL-001 — LinkedIn → Essentia Group/Gupy → autenticação](casos/PORTAL-001-linkedin-gupy-essentia.json): Scrum Master - Presencial, Palhoça/SC. Evidência recebida em 20/11/2026; fluxo documentado até o login, sem navegação de validação nem envio de candidatura. Etapas posteriores ainda não observadas.
 
 - [PORTAL-002 — LinkedIn → Audaces/InHire → formulário direto](casos/PORTAL-002-linkedin-inhire-audaces.json): Especialista em Governança de Projetos (PMO), Florianópolis/SC, híbrido. Fluxo sem conta segundo o relato do usuário, com sete campos obrigatórios observados. Sem execução de teste ou confirmação de envio.
+
+- [PORTAL-003 — LinkedIn Easy Apply / Compass UOL](casos/PORTAL-003-linkedin-easy-apply-compass.json): fluxo nativo de quatro páginas, com páginas 1–3 observadas (contato, currículo e perguntas adicionais). Valores pessoais não transcritos. Link da vaga, revisão final e confirmação de envio ainda não fornecidos.

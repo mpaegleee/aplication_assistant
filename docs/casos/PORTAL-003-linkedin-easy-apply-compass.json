@@ -1,0 +1,208 @@
+{
+  "id": "PORTAL-003",
+  "received_date": "2026-11-20",
+  "status": "registered_from_user_evidence_not_executed",
+  "evidence": {
+    "source": "Quatro capturas e relato de candidatura simplificada enviados pelo usuário nesta conversa",
+    "screenshots_saved_as_files": false,
+    "live_navigation_verified": false,
+    "personal_contact_values_transcribed": false,
+    "personal_resume_filenames_transcribed": false
+  },
+  "vacancy": {
+    "company_confirmed_in_application_header": "Compass UOL",
+    "title_visible_in_search_results": "Agile Master I (Remote)",
+    "association_of_search_title_to_open_form_independently_verified": false,
+    "location_label_in_search_results": "Brasil (Remoto)",
+    "country": "BR",
+    "contract_question_regime_observed": "CLT"
+  },
+  "links": {
+    "linkedin_listing": null,
+    "application_form_full_url": null
+  },
+  "identifiers": {
+    "linkedin_job_id": null
+  },
+  "flow_classification": {
+    "type": "linkedin_easy_apply",
+    "origin_platform": "linkedin",
+    "destination_platform": "linkedin",
+    "external_redirect_observed": false,
+    "existing_authenticated_session_visible": true,
+    "authentication_flow_observed": false,
+    "new_account_creation_observed": false
+  },
+  "observed_flow": [
+    {
+      "step": 1,
+      "screenshot": 1,
+      "screen": "Resultados de pesquisa do LinkedIn",
+      "observations": [
+        "Filtros visíveis incluem Vagas, Último mês e Candidatura simplificada.",
+        "Há resultados exatos e sugestões relacionadas que podem não corresponder exatamente à pesquisa.",
+        "O selo Candidatura simplificada é visível para vagas da listagem."
+      ]
+    },
+    {
+      "step": 2,
+      "screenshot": 2,
+      "screen": "Candidate-se à empresa Compass UOL — Informações de contato",
+      "form_page": 1,
+      "form_pages_total": 4,
+      "action_label": "Avançar",
+      "fields": [
+        {
+          "key": "email",
+          "label": "E-mail",
+          "required": true,
+          "kind": "select",
+          "existing_value_visible": true,
+          "value_recorded": false
+        },
+        {
+          "key": "phone_country",
+          "label": "Código do país",
+          "required": true,
+          "kind": "select",
+          "observed_value_label": "Brasil (+55)"
+        },
+        {
+          "key": "phone",
+          "label": "Número de celular",
+          "required": true,
+          "kind": "text",
+          "existing_value_visible": true,
+          "value_recorded": false,
+          "character_counter_limit_observed": 25
+        }
+      ]
+    },
+    {
+      "step": 3,
+      "screenshot": 3,
+      "screen": "Currículo",
+      "form_page": 2,
+      "form_pages_total": 4,
+      "actions_observed": [
+        "Voltar",
+        "Avançar"
+      ],
+      "fields": [
+        {
+          "key": "resume",
+          "label": "Currículo",
+          "required": true,
+          "kind": "existing_file_selection_or_upload",
+          "allowed_extensions_label": [
+            "DOC",
+            "DOCX",
+            "PDF"
+          ],
+          "size_limit_label": "menos de 2 MB",
+          "strict_less_than_limit_in_label": true,
+          "exact_limit_in_bytes_verified": false,
+          "multiple_previous_files_visible": true,
+          "one_previous_file_selected": true,
+          "specific_file_names_recorded": false,
+          "upload_action_executed": false
+        }
+      ]
+    },
+    {
+      "step": 4,
+      "screenshot": 4,
+      "screen": "Perguntas adicionais",
+      "form_page": 3,
+      "form_pages_total": 4,
+      "actions_observed": [
+        "Voltar",
+        "Avaliar"
+      ],
+      "fields": [
+        {
+          "key": "salary_expectation_clt",
+          "label": "Qual sua pretensão salarial CLT?",
+          "required": true,
+          "kind": "text",
+          "character_counter_limit_observed": 20,
+          "answer_source": "Pretensão CLT explicitamente confirmada pelo usuário"
+        },
+        {
+          "key": "last_compensation",
+          "label": "Qual sua última remuneração?",
+          "required": true,
+          "kind": "text",
+          "character_counter_limit_observed": 20,
+          "answer_source": "Última remuneração informada pelo usuário; não reutilizar pretensão ou salário mínimo do filtro"
+        },
+        {
+          "key": "psm_i_certification",
+          "label": "Possui certificação Certificação PSM I (Professional Scrum Master I) ?",
+          "required": true,
+          "kind": "text",
+          "character_counter_limit_observed": 20,
+          "answer_source": "Certificação específica confirmada; experiência como Scrum Master não comprova certificação"
+        },
+        {
+          "key": "it_education_requirement",
+          "label": "Possui graduação em Tecnologia da Informação ou graduação em outra área com pós-graduação em Tecnologia da Informação?",
+          "required": true,
+          "kind": "single_choice",
+          "options": [
+            "Yes",
+            "No"
+          ],
+          "answer_source": "Formação confirmada que satisfaça a combinação solicitada; respeitar os valores Yes/No da interface"
+        },
+        {
+          "key": "it_experience_provable_ctps",
+          "label": "Consegue comprovar quanto tempo de experiência profissional em Tecnologia da Informação, por meio da CTPS?",
+          "required": true,
+          "kind": "text",
+          "character_counter_limit_observed": 20,
+          "answer_source": "Tempo de experiência em TI comprovável pela CTPS, confirmado pelo usuário; não somar automaticamente toda a carreira, contratos PJ ou períodos sobrepostos"
+        },
+        {
+          "key": "agile_role_experience_partial",
+          "label_visible_fragment": "Possui experiência atuando como Agile Master, Scrum Master",
+          "label_complete": false,
+          "required": null,
+          "kind": null,
+          "answer_source": "Ainda não especificável: restante da pergunta e controle fora da captura"
+        }
+      ]
+    }
+  ],
+  "test_expectations": [
+    "Distinguir candidatura simplificada nativa do LinkedIn de candidaturas externas Gupy e InHire.",
+    "Aplicar análise de aderência à descrição real, mesmo quando a vaga aparece sob filtro ou sugestão de pesquisa; filtros não garantem compatibilidade.",
+    "Identificar as páginas pelo progresso e conteúdo, sem assumir que todo Easy Apply tem sempre quatro páginas.",
+    "Conferir os dados de contato existentes com o perfil confirmado, sem sobrescrever por valores inventados.",
+    "Selecionar explicitamente o currículo correto para esta vaga; a seleção inicial de arquivo antigo não comprova que seja a versão ajustada.",
+    "Respeitar DOC/DOCX/PDF e o limite apresentado; validar o limite efetivo de bytes e o término de eventual upload no fluxo real.",
+    "Usar banco de respostas confirmadas, separando pretensão CLT, última remuneração, certificação, formação e tempo comprovável.",
+    "Não responder positivamente a certificações ou formação por inferência da profissão ou da nota de aderência.",
+    "Tratar pergunta obrigatória sem resposta confirmada como pendência específica, preservando o progresso.",
+    "Reconhecer Avaliar como uma ação distinta de envio final; não contar candidatura por avançar páginas ou chegar à revisão.",
+    "Observar a quarta página e exigir confirmação final do LinkedIn antes de registrar envio confirmado.",
+    "Registrar identificador real da vaga quando fornecido, para deduplicação e eventual retomada.",
+    "Considerar as restrições da plataforma e a capacidade real do conector antes de habilitar execução automatizada."
+  ],
+  "not_observed": [
+    "Link e identificador desta vaga",
+    "Descrição completa e requisitos fora do formulário",
+    "Restante das perguntas adicionais da página 3",
+    "Página 4 de 4",
+    "Botão final de envio",
+    "Confirmação de candidatura enviada",
+    "Comportamento em erros, candidatura duplicada ou retomada",
+    "Verificações adicionais eventualmente exigidas pelo LinkedIn"
+  ],
+  "test_execution": {
+    "executed": false,
+    "credentials_received": false,
+    "personal_data_entered_by_assistant": false,
+    "application_submitted": false
+  }
+}
