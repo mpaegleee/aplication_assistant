@@ -52,23 +52,26 @@ CONNECTORS = [
     {
         "id": "linkedin",
         "name": "LinkedIn",
-        "discovery": False,
-        "submission": False,
-        "reason": "Busca autenticada e envio por navegador ainda não validados; importação assistida.",
+        "discovery": True,
+        "submission": True,
+        "experimental": True,
+        "reason": "Busca experimental de vagas e publicações com sessão salva. Formulário automático experimental opcional; exige validação no portal real.",
     },
     {
         "id": "gupy",
         "name": "Gupy",
-        "discovery": False,
-        "submission": False,
-        "reason": "Conector autenticado de cadastro e envio ainda não validado.",
+        "discovery": True,
+        "submission": True,
+        "experimental": True,
+        "reason": "Leitura experimental de páginas de empresas configuradas como fontes; formulário de candidatura experimental, sem criação automática de conta.",
     },
     {
         "id": "indeed",
         "name": "Indeed",
-        "discovery": False,
-        "submission": False,
-        "reason": "Busca e envio exigem integração autorizada e validação específica.",
+        "discovery": True,
+        "submission": True,
+        "experimental": True,
+        "reason": "Busca experimental por sessão no navegador; verificações exigem intervenção. Formulário automático experimental opcional.",
     },
     {
         "id": "email",
@@ -99,7 +102,8 @@ def platform_for(url, fallback="company"):
 def source_platform(source):
     if source.get("kind") in ["greenhouse", "lever"]:
         return source["kind"]
-    return platform_for(source.get("url", ""), source.get("kind", "feed"))
+    platform = platform_for(source.get("url", ""), source.get("kind", "feed"))
+    return "company" if platform == "inhire" else platform
 
 
 def source_address(source):

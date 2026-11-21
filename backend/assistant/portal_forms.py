@@ -26,6 +26,8 @@ def answer_for(label, profile):
     if saved:
         return saved[0] if len(set(saved)) == 1 else None
     return {
+        "nome": profile.get("name"),
+        "full name": profile.get("name"),
         "nome completo": profile.get("name"),
         "seu nome completo": profile.get("name"),
         "email": profile.get("email"),
@@ -34,6 +36,9 @@ def answer_for(label, profile):
         "seu melhor e-mail": profile.get("email"),
         "celular com ddd": profile.get("phone"),
         "telefone": profile.get("phone"),
+        "numero de celular": profile.get("phone"),
+        "phone number": profile.get("phone"),
+        "mobile phone number": profile.get("phone"),
         "linkedin": profile.get("linkedin_url"),
     }.get(key)
 

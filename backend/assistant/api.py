@@ -1,5 +1,6 @@
 import os, sys, secrets, threading, time, sqlite3
 from pathlib import Path
+from typing import Literal
 from contextlib import asynccontextmanager
 from io import BytesIO
 from urllib.parse import urlsplit
@@ -23,6 +24,7 @@ from .sources import public_fetch, read_source
 from .mail import parse_followup, email_eligible
 from .browser import BrowserManager
 from .browser_api import install_browser_routes
+from .worklist import worklist
 
 
 def data_directory():
@@ -39,6 +41,14 @@ def data_directory():
 class Password(Model):
     password: str = Field(min_length=12, max_length=256)
     setup_token: str = Field(default="", max_length=256)
+
+
+class RunInput(Model):
+    action: Literal["collect", "apply"] = "apply"
+
+
+class ArchiveInput(Model):
+    archived: bool
 
 
 class URLInput(Model):
@@ -112,7 +122,7 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
 
     app = FastAPI(
         title="Application Assistant",
-        version="0.3.0",
+        version="0.4.0",
         lifespan=lifespan,
         docs_url=None,
         redoc_url=None,
@@ -203,7 +213,7 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
 
     @app.get("/api/health")
     def health():
-        return {"ok": True, "version": "0.3.0"}
+        return {"ok": True, "version": "0.4.0"}
 
     @app.get("/api/session")
     def session(request: Request):
@@ -247,10 +257,11 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
             j.pop("submitted_profile", None)
             j["email_eligible"] = email_eligible(j)
         return {
-            "version": "0.3.0",
+            "version": "0.4.0",
             "profile": engine.profile(),
             "settings": settings,
             "jobs": jobs,
+            "worklist": worklist(engine.profile(), engine.settings(), jobs),
             "events": store.all("events")[:500],
             "runs": store.all("runs")[:50],
             "followups": store.all("followups")[:100],
@@ -486,9 +497,27 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
             store.event(id, "Atualização manual: " + payload.note)
             return {"ok": True}
 
+    @app.post("/api/jobs/{id}/archive", dependencies=[Depends(auth)])
+    def archive_job(id: str, payload: ArchiveInput):
+        with engine.lock:
+            job = engine.require_job(id)
+            if job["status"] in TERMINAL or job["status"] == "sending":
+                raise ValueError(
+                    "Use o histórico para candidaturas já tentadas ou encerradas."
+                )
+            job["archived"] = payload.archived
+            store.put("jobs", job, id)
+            store.event(
+                id,
+                "Vaga arquivada da fila."
+                if payload.archived
+                else "Vaga restaurada na fila.",
+            )
+        return {"ok": True}
+
     @app.post("/api/runs", dependencies=[Depends(auth)])
-    def run():
-        engine.start_run()
+    def run(payload: RunInput | None = None):
+        engine.start_run(payload.action if payload else "apply")
         return {"ok": True}
 
     @app.post("/api/pause", dependencies=[Depends(auth)])

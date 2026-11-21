@@ -1,0 +1,49 @@
+name: Validar e empacotar Linux
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  linux:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/browsers
+      PYTHONPATH: backend
+      RUN_BROWSER_TESTS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Preparar runtime e dependências
+        run: |
+          uv python install 3.14.10
+          uv venv --python 3.14.10 .venv
+          uv pip install --require-hashes -r backend/requirements.lock
+          uv pip install pytest==8.3.5
+          sudo .venv/bin/python -m playwright install-deps chromium
+          .venv/bin/python -m playwright install --no-shell chromium
+      - name: Testar e compilar interface
+        run: |
+          npm --prefix frontend ci
+          npm --prefix frontend run build
+          .venv/bin/python -m pytest -q backend/tests
+      - name: Empacotar Linux e código
+        run: |
+          aa_runtime=$(dirname "$(dirname "$(uv python find 3.14.10)")")
+          .venv/bin/python packaging/build_linux.py --runtime "$aa_runtime" --site .venv/lib/python3.14/site-packages --browsers browsers
+          git archive --format=zip --prefix=Application-Assistant/ -o dist/ApplicationAssistant-Codigo-0.4.0.zip HEAD
+          sha256sum dist/ApplicationAssistant-Codigo-0.4.0.zip > dist/ApplicationAssistant-Codigo-0.4.0.zip.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ApplicationAssistant-Linux-0.4.0
+          path: |
+            dist/*.tar.gz*
+            dist/ApplicationAssistant-Codigo-0.4.0.zip*
+          retention-days: 14

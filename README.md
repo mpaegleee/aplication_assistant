@@ -1,51 +1,72 @@
 # Application Assistant
 
-Assistente pessoal para candidaturas no Brasil, com importação de currículo PDF, análise de aderência, revisão, documentos e acompanhamento. Uma pessoa por instalação. Prioridade: Windows 10/11 x64; Docker em Linux para servidor próprio.
+Assistente gratuito e de código aberto para organizar a busca por emprego no Brasil. Uma pessoa por instalação, com dados locais e IA escolhida pelo usuário. **Windows e Linux x64; macOS não faz parte desta versão.**
 
-**Versão 0.3.0 para teste local. Nenhum código ou binário foi publicado.** Navegador Chromium interno com login manual, sessões criptografadas e controle via WebSocket. InHire tem formulário direto experimental validado em testes controlados; SMTP mantém envio automático. Busca autenticada e envio automático em LinkedIn, Gupy e Indeed ainda estão pendentes.
+## Dois caminhos para a candidatura
 
-- [Navegador, sessões e atualização 0.3.0](docs/ATUALIZACAO-0.3.0.md)
+**Manual:** a aplicação consolida vagas e publicações em uma fila. Consulte a descrição, filtre a aderência, analise as evidências, gere o currículo específico e abra o destino da candidatura. Nos portais integrados, a página abre no navegador da própria aplicação, com login, sessão e anexo do currículo. O usuário conclui o envio e registra a confirmação.
 
-- [Rotina automática e limites da versão 0.2.0](docs/ATUALIZACAO-0.2.0.md)
-- [Guia do usuário](docs/GUIA-DO-USUARIO.md)
-- [Atualização 0.1.1: seleção de provedor e modelos](docs/ATUALIZACAO-0.1.1.md)
-- [Especificação e regras](docs/ESPECIFICACAO.md)
-- [Teste local e roteiro de aceite](docs/TESTE-LOCAL.md)
-- [Arquitetura e operação](docs/ARQUITETURA.md)
-- [Verificação e limitações](docs/VERIFICACAO.md)
+**Automático:** a rotina agendada busca, consolida, analisa e tenta candidatar nas fontes e destinos habilitados. Há modo de aprovação prévia, limites diários, critérios por área/modalidade/localidade, percentual mínimo e pausa. A ação **Buscar e consolidar agora** nunca envia, mesmo no modo automático.
 
-## Executar a partir do projeto
+O currículo destaca e ordena fatos confirmados do perfil; a IA não cria certificações ou experiências para aumentar a aderência.
 
-Requer Python 3.12+ e Node.js 24 LTS apenas para preparar o projeto. No Windows, execute `Preparar-e-iniciar.cmd`. Na primeira execução serão baixadas as dependências e compilada a interface. O navegador abrirá em http://127.0.0.1:8765. Nas próximas vezes o script reutiliza a instalação.
+## Versão 0.4.0
 
-Linux:
+- Fila **Vagas consolidadas**, filtros, descrição de publicações, currículo por posição e histórico.
+- Fontes RSS/JSON/JobPosting, Greenhouse e Lever; busca experimental no navegador em LinkedIn (vagas e publicações), Indeed e páginas Gupy configuradas pelo usuário.
+- Navegador Chromium próprio, sessões criptografadas, transição entre portais conhecidos e anexo manual sem extensão do navegador pessoal.
+- SMTP TLS; InHire direto; formulários de múltiplas etapas experimentais em LinkedIn, Gupy e Indeed. Os formulários experimentais começam **desabilitados** e só atuam em controles reconhecidos, com respostas exatas e currículo novo.
+- Sessão vencida, CAPTCHA, criação de conta, botão ambíguo e perguntas desconhecidas geram pendência. Não existe automação universal de qualquer site. Um resultado incerto nunca é repetido automaticamente.
+- Acompanhamento por histórico e IMAP opcional.
+
+**Validação:** testes automatizados e Chromium real com sites de teste controlados. Ainda não foram realizadas candidaturas reais nem validação de todos os layouts dos portais. O instalador Windows é compilado em Linux e precisa do teste nativo antes de uma distribuição estável.
+
+## Instalar
+
+Os artefatos preparados para a seção **Releases** são:
+
+| Sistema | Arquivo | Como usar |
+|---|---|---|
+| Windows 10/11 x64 | `ApplicationAssistant-Setup-0.4.0-Windows-x64.exe` | Executar o instalador e abrir pelo atalho |
+| Linux x64 | `ApplicationAssistant-0.4.0-Linux-x64.tar.gz` | Extrair e executar `./Iniciar.sh`; `./Instalar.sh` cria o atalho |
+| Desenvolvimento | `ApplicationAssistant-Codigo-0.4.0.zip` | Código, testes e scripts de build |
+
+Python, driver e Chromium acompanham os pacotes de uso. No Linux, bibliotecas de sistema do Chromium ainda podem ser necessárias. O computador deve permanecer ligado, sem suspensão, com o processo aberto. Para servidor próprio, há instalação Docker.
+
+- [Guia da versão: fila manual, rotina, busca em posts e limitações](docs/ATUALIZACAO-0.4.0.md)
+- [Configuração para usuários](docs/GUIA-DO-USUARIO.md)
+- [Instalar no Linux](docs/LINUX.md)
+- [Verificação e testes](docs/VERIFICACAO.md)
+- [Contribuir](CONTRIBUTING.md)
+- [Preparar e publicar uma versão](docs/PUBLICACAO.md)
+
+## Desenvolver
+
+Requer Python 3.12+ e Node.js 24 LTS. No Windows, `Preparar-e-iniciar.cmd` prepara as dependências e abre a aplicação. No Linux:
 
 ```sh
-python -m venv .venv
-.venv/bin/pip install -r backend/requirements.txt
+python3 -m venv .venv
+.venv/bin/pip install --require-hashes -r backend/requirements.lock
+.venv/bin/python -m playwright install --with-deps --no-shell chromium
 npm --prefix frontend ci
 npm --prefix frontend run build
 .venv/bin/python backend/launcher.py
 ```
 
-Mantenha o processo aberto. A agenda não roda com computador desligado ou suspenso. Toda instalação começa pausada, sem fontes, sem credenciais e em modo de aprovação.
-
-## Testes e empacotamento
+Acesse `http://127.0.0.1:8765`. A instalação inicia pausada, sem contas nem dados de exemplo.
 
 ```sh
 .venv/bin/pip install -r backend/requirements-dev.txt
-PYTHONPATH=backend .venv/bin/pytest -q backend/tests
+RUN_BROWSER_TESTS=1 PYTHONPATH=backend .venv/bin/pytest -q backend/tests
 npm --prefix frontend run build
 ```
 
-`packaging/build-windows.ps1` gera o executável Windows via PyInstaller. `packaging/installer.iss` gera o instalador com Inno Setup. O workflow Windows também verifica a inicialização do binário antes de disponibilizá-lo como artefato privado; não cria release pública.
+## Servidor próprio
 
-`packaging/build_portable.py` prepara um pacote portátil para o primeiro teste Windows, com runtime CPython embutido, dependências Windows e interface já compilada. Não requer Python ou Node na máquina do usuário. O pacote precisa ser validado em Windows antes de distribuição. Bytecode Python não é proteção contra engenharia reversa.
+Copie `.env.example` para `.env`, defina um código aleatório de configuração e execute `docker compose up --build -d`. O acesso remoto exige proxy HTTPS e ajuste dos hosts e cookies seguros. O host precisa permitir o sandbox do Chromium. Use uma instância e um volume por pessoa; não use múltiplos workers.
 
-## Servidor próprio (opcional, depois do teste local)
+## Licença e dados
 
-Copie `.env.example` para `.env`, altere o código de configuração e execute `docker compose up --build -d`. A porta é publicada somente no loopback por padrão. Acesso externo exige proxy HTTPS, `AA_ALLOWED_HOSTS` e cookies seguros; veja o guia. Não usar múltiplos workers ou compartilhar o volume entre réplicas.
+[MIT](LICENSE.txt): uso, estudo, adaptação e redistribuição permitidos, preservados os avisos. Dependências e Chromium mantêm suas próprias licenças. O aplicativo é gratuito; os provedores de IA podem cobrar.
 
-## Distribuição
-
-Código reservado ao mantenedor. A licença proprietária gratuita e avisos de dependências devem ser revisados antes de distribuir. O repositório de código deve ser privado; downloads e documentação podem ter canal público separado.
+Credenciais e sessões ficam criptografadas nesta instalação. Perfil e anúncio são enviados ao provedor de IA quando o usuário autoriza; contatos digitados no navegador são enviados ao portal. Proteja o banco e sua chave. Não publique `.env`, contas, cookies, currículos ou a pasta de dados.

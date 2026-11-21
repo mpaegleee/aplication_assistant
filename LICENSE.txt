@@ -1,20 +1,24 @@
-Application Assistant — licença proprietária de uso gratuito (versão de teste)
-Copyright (c) 2026 mpaeglee. Todos os direitos reservados.
+MIT License
 
-O titular autoriza o uso gratuito dos binários oficiais para uso pessoal na busca
-por emprego, incluindo a execução em servidor próprio para uma pessoa por
-instalação. A distribuição gratuita não concede acesso ao código-fonte nem
-transfere direitos de propriedade intelectual.
+Copyright (c) 2026 Marcos Paegle (mpaeglee) and contributors
 
-Não é concedida autorização para revender, sublicenciar, publicar o código-fonte
-ou redistribuir versões modificadas da aplicação. As restrições aplicam-se na
-medida permitida pela legislação aplicável. Dependências de terceiros mantêm
-suas próprias licenças, identificadas nos respectivos avisos.
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-A versão é fornecida para testes, sem garantia de disponibilidade de serviços de
-terceiros, contratação, entrega de mensagens ou compatibilidade universal com
-portais de emprego. O usuário controla credenciais, provedores e candidaturas.
-Nenhuma cláusula exclui direitos que não possam ser afastados por lei.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-O mantenedor deve revisar e aprovar estes termos e os avisos de dependências
-antes de uma distribuição pública. Esta versão local não foi publicada.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+Third-party dependencies retain their own licenses; see THIRD-PARTY-NOTICES
+and the license files distributed with the runtime and browser.

@@ -24,6 +24,9 @@ export function RunSummary({ state }: { state: AppState }) {
               : "Resumo da última execução"}
           </h2>
           <p>
+            {run.action === "collect"
+              ? "Coleta sem envio · "
+              : "Execução com candidaturas · "}
             {format(run.started_at)} ·{" "}
             {run.status === "running"
               ? "Em execução"
@@ -49,6 +52,7 @@ export function RunSummary({ state }: { state: AppState }) {
           ["Encontradas", run.found ?? "—"],
           ["Aderentes", run.eligible ?? "—"],
           ["Concluídas pelo conector", run.sent],
+          ["Consolidadas sem envio", run.consolidated ?? 0],
           ["Pendências", run.pending ?? "—"],
         ].map(([label, value]) => (
           <div className="stat" key={label}>
@@ -151,7 +155,10 @@ export function AutomationPanel({ state, act, busy, go }: Props) {
               value={s.mode}
               onChange={(e) => change("mode", e.target.value)}
             >
-              <option value="review">Aprovar cada candidatura</option>
+              <option value="manual">
+                Somente consolidar; eu me candidato
+              </option>
+              <option value="review">Automatizar após minha aprovação</option>
               <option value="automatic">
                 Enviar automaticamente nos conectores disponíveis
               </option>
@@ -196,6 +203,43 @@ export function AutomationPanel({ state, act, busy, go }: Props) {
               onChange={(e) => change("auto_classify_areas", e.target.checked)}
             />
           </label>
+          <h3>Termos da busca nos portais</h3>
+          <label className="field">
+            <span>
+              Um cargo ou expressão por linha; vazio usa os cargos do perfil
+            </span>
+            <textarea
+              value={s.browser_search_queries.join("\n")}
+              onChange={(e) =>
+                change("browser_search_queries", e.target.value.split("\n"))
+              }
+              onBlur={() =>
+                change(
+                  "browser_search_queries",
+                  s.browser_search_queries.map((q) => q.trim()).filter(Boolean),
+                )
+              }
+            />
+          </label>
+          <label className="toggle-row">
+            <span>
+              Incluir publicações do LinkedIn com oportunidades e instruções de
+              e-mail
+            </span>
+            <input
+              type="checkbox"
+              checked={s.linkedin_posts_enabled}
+              onChange={(e) =>
+                change("linkedin_posts_enabled", e.target.checked)
+              }
+            />
+          </label>
+          <p>
+            LinkedIn e Indeed usam o navegador interno e a sessão salva. Gupy lê
+            páginas de empresas cadastradas como fontes. Uma mudança de layout
+            ou verificação deixa uma pendência. Os conectores de busca são
+            experimentais.
+          </p>
           <h3>Onde pesquisar</h3>
           {state.connectors
             .filter((c) => c.id !== "email" && c.id !== "inhire")
@@ -214,6 +258,24 @@ export function AutomationPanel({ state, act, busy, go }: Props) {
                 />
               </label>
             ))}
+          <label className="toggle-row">
+            <span>
+              <strong>Usar formulários automáticos experimentais</strong>
+              <small>
+                LinkedIn, Gupy e Indeed: somente etapas reconhecidas, respostas
+                salvas e currículo confirmado. Login, cadastro de conta e etapas
+                desconhecidas exigem intervenção. Ainda sem validação nos
+                portais reais.
+              </small>
+            </span>
+            <input
+              type="checkbox"
+              checked={s.experimental_portal_submission}
+              onChange={(e) =>
+                change("experimental_portal_submission", e.target.checked)
+              }
+            />
+          </label>
           <h3>Onde permitir finalizar</h3>
           <p>
             Autorizar um destino não inicia buscas nele. Um destino sem conector
@@ -226,9 +288,11 @@ export function AutomationPanel({ state, act, busy, go }: Props) {
                 <span>
                   <strong>
                     {c.name}{" "}
-                    {c.submission
-                      ? "· envio disponível"
-                      : "· finalização assistida"}
+                    {c.experimental
+                      ? "· formulário experimental"
+                      : c.submission
+                        ? "· envio disponível"
+                        : "· finalização assistida"}
                   </strong>
                 </span>
                 <input
@@ -250,6 +314,9 @@ export function AutomationPanel({ state, act, busy, go }: Props) {
             </p>
           ))}
           <div className="stack">
+            <button className="secondary" onClick={() => go("worklist")}>
+              Ver vagas consolidadas
+            </button>
             <button className="secondary" onClick={() => go("profile")}>
               Revisar perfil
             </button>

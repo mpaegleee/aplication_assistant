@@ -106,9 +106,12 @@ class Settings(Model):
     allowed_destinations: list[str] = Field(
         default_factory=lambda: ["email"], max_length=8
     )
+    browser_search_queries: list[str] = Field(default_factory=list, max_length=10)
+    linkedin_posts_enabled: bool = True
+    experimental_portal_submission: bool = False
     auto_classify_areas: bool = False
     run_time_limit_minutes: int = Field(default=60, ge=1, le=240)
-    mode: Literal["review", "automatic"] = "review"
+    mode: Literal["manual", "review", "automatic"] = "review"
     threshold: int = Field(default=80, ge=0, le=100)
     minimum_confidence: int = Field(default=85, ge=50, le=100)
     daily_limit: int = Field(default=10, ge=1, le=100)
@@ -144,6 +147,13 @@ class Settings(Model):
     imap_poll_minutes: int = Field(default=15, ge=5, le=1440)
     imap_max_messages: int = Field(default=30, ge=1, le=100)
     auto_followup: bool = False
+
+    @field_validator("browser_search_queries")
+    @classmethod
+    def queries_valid(cls, value):
+        if any(not 2 <= len(q.strip()) <= 150 for q in value):
+            raise ValueError("Informe termos de busca entre 2 e 150 caracteres.")
+        return list(dict.fromkeys(q.strip() for q in value))
 
     @field_validator("search_platforms", "allowed_destinations")
     @classmethod

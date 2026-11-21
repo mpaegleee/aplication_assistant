@@ -1,7 +1,7 @@
 # Application Assistant — especificação v0.1
 
 ## Decisões confirmadas
-Uma pessoa por instalação; Brasil; português; Windows 10/11 primeiro e Docker em Linux para servidor. macOS fora do lançamento inicial. Perfil importado do PDF exportado pelo LinkedIn e confirmado pelo usuário. Modo híbrido: aprovação por candidatura ou automático configurável. Distribuição gratuita com código fechado; código não deve ser publicado em repositório público. A licença final de distribuição requer revisão do mantenedor antes da publicação.
+Uma pessoa por instalação; Brasil; português; Windows 10/11 primeiro e Docker em Linux para servidor. macOS fora do lançamento inicial. Perfil importado do PDF exportado pelo LinkedIn e confirmado pelo usuário. Modo híbrido: aprovação por candidatura ou automático configurável. Distribuição gratuita e código aberto sob MIT, conforme decisão atual do mantenedor. Windows e Linux x64; macOS fora do escopo. Consulte ATUALIZACAO-0.4.0.md para os fluxos manual e automático e limites dos conectores experimentais.
 
 ## Fluxo
 1. Criar senha local e configurar IA (endpoint compatível com Chat Completions, inclusive Ollama).

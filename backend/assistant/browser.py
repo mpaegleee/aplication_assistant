@@ -4,6 +4,7 @@ import asyncio
 import concurrent.futures
 import sqlite3
 import threading
+import secrets
 from contextlib import suppress
 from urllib.parse import urlsplit
 
@@ -16,6 +17,8 @@ PORTALS = {
     "gupy": ("https://login.gupy.io/candidate/signin", ("gupy.io",)),
     "indeed": ("https://br.indeed.com/", ("indeed.com", "indeed.com.br")),
     "inhire": ("", ("inhire.app",)),
+    "greenhouse": ("", ("greenhouse.io",)),
+    "lever": ("", ("lever.co",)),
 }
 AUTH_DOMAINS = ("accounts.google.com", "login.microsoftonline.com")
 
@@ -45,6 +48,9 @@ class BrowserManager:
         self.contexts = {}
         self.pages = {}
         self.leases = {}
+        self.job_ids = {}
+        self.handoffs = {}
+        self.upload_fields = {}
         self.busy = set()
         self.start_lock = threading.Lock()
         self.context_lock = asyncio.Lock()
@@ -139,6 +145,25 @@ class BrowserManager:
                 except OSError:
                     private = True
             if (
+                request.is_navigation_request()
+                and request.frame == request.frame.page.main_frame
+                and not allowed_url(request.url, platform)
+            ):
+                from .connectors import platform_for
+
+                destination = platform_for(request.url)
+                if (
+                    destination != platform
+                    and destination in PORTALS
+                    and allowed_url(request.url, destination)
+                    and not private
+                ):
+                    self.handoffs[platform] = {
+                        "platform": destination,
+                        "url": request.url,
+                        "job_id": self.job_ids.get(platform),
+                    }
+            if (
                 private
                 or parsed.scheme not in ("https", "data", "blob")
                 or (
@@ -163,7 +188,7 @@ class BrowserManager:
         self.contexts[platform] = context
         return context
 
-    async def open(self, platform, url=""):
+    async def open(self, platform, url="", job_id=None):
         if platform in self.busy or platform in self.leases:
             raise ValueError(
                 "Portal em uso. Libere o controle antes de abrir outra página."
@@ -172,13 +197,22 @@ class BrowserManager:
         if not target or not allowed_url(target, platform):
             raise ValueError("Informe um endereço HTTPS do portal selecionado.")
         self.busy.add(platform)
+        self.job_ids[platform] = job_id
+        self.handoffs.pop(platform, None)
+        self.upload_fields.pop(platform, None)
         try:
             context = await self.context(platform)
             page = self.pages.get(platform)
             if not page or page.is_closed():
                 page = await context.new_page()
                 self.pages[platform] = page
-            await page.goto(target, wait_until="domcontentloaded", timeout=45000)
+            try:
+                await page.goto(target, wait_until="domcontentloaded", timeout=45000)
+            except BrowserError:
+                if platform not in self.handoffs:
+                    raise ValueError(
+                        "O portal não abriu a página. Confira o endereço e a sessão."
+                    ) from None
             return {"ok": True}
         finally:
             self.busy.discard(platform)
@@ -224,6 +258,19 @@ class BrowserManager:
             )
         return {"ok": True}
 
+    async def self_test(self):
+        await self.context("inhire")
+        temporary = await self.browser.new_context()
+        try:
+            page = await temporary.new_page()
+            await page.set_content(
+                "<main>Application Assistant: navegador disponível</main>"
+            )
+            image = await page.screenshot(type="png")
+            return {"ok": image.startswith(b"\x89PNG"), "version": self.browser.version}
+        finally:
+            await temporary.close()
+
     async def status(self):
         return [
             {
@@ -232,9 +279,82 @@ class BrowserManager:
                 "saved_at": self.store.get("browser_sessions", p, {}).get("saved_at"),
                 "busy": p in self.busy,
                 "controlled": p in self.leases,
+                "job_id": self.job_ids.get(p),
+                "handoff": {"platform": self.handoffs[p]["platform"]}
+                if p in self.handoffs
+                else None,
             }
             for p in PORTALS
         ]
+
+    async def handoff(self, platform):
+        if platform in self.leases or platform in self.busy:
+            raise ValueError(
+                "Salve a sessão e libere o controle antes de mudar de portal."
+            )
+        target = self.handoffs.get(platform)
+        if not target:
+            raise ValueError("Nenhum redirecionamento pendente.")
+        await self.open(target["platform"], target["url"], target["job_id"])
+        self.handoffs.pop(platform, None)
+        return {"platform": target["platform"], "job_id": target["job_id"]}
+
+    async def file_fields(self, platform, owner):
+        if self.leases.get(platform) != owner:
+            raise ValueError("Assuma o controle antes de escolher o anexo.")
+        page = self.pages[platform]
+        fields = {}
+        result = []
+        for frame in page.frames:
+            if not allowed_url(frame.url, platform):
+                continue
+            for element in (
+                await frame.locator('input[type="file"]').element_handles()
+            )[:20]:
+                if await element.is_disabled():
+                    continue
+                id = secrets.token_hex(12)
+                details = await element.evaluate(
+                    "e => ({label: Array.from(e.labels || []).map(l => l.innerText).join(' ') || e.getAttribute('aria-label') || e.name || 'Anexo', accept: e.accept || ''})"
+                )
+                fields[id] = (element, page, self.job_ids.get(platform), page.url)
+                result.append(
+                    {
+                        "id": id,
+                        "label": details["label"][:250],
+                        "accept": details["accept"][:250],
+                    }
+                )
+        self.upload_fields[platform] = fields
+        return result
+
+    async def attach(self, platform, owner, job_id, field_id, pdf):
+        if self.leases.get(platform) != owner or self.job_ids.get(platform) != job_id:
+            raise ValueError("A vaga não corresponde à sessão controlada.")
+        record = self.upload_fields.get(platform, {}).get(field_id)
+        if not record:
+            raise ValueError("Localize novamente o campo de anexo.")
+        element, page, bound_job, url = record
+        if (
+            bound_job != job_id
+            or page != self.pages.get(platform)
+            or page.url != url
+            or not await element.evaluate("e => e.isConnected")
+        ):
+            raise ValueError("A página mudou. Localize o anexo novamente.")
+        accept = (await element.get_attribute("accept") or "").lower()
+        if accept and not any(x in accept for x in ("pdf", "application/*", "*/*")):
+            raise ValueError("Este campo não aceita PDF. Escolha o campo de currículo.")
+        if len(pdf) >= 2_000_000:
+            raise ValueError("Currículo excede 2 MB. Revise o perfil antes de anexar.")
+        await element.set_input_files(
+            {"name": "Curriculo.pdf", "mimeType": "application/pdf", "buffer": pdf}
+        )
+        self.upload_fields.pop(platform, None)
+        self.store.event(
+            job_id,
+            "Currículo anexado pelo usuário no navegador interno; envio ainda não confirmado.",
+        )
 
     async def acquire(self, platform, owner):
         if platform in self.busy or platform in self.leases:
@@ -293,6 +413,68 @@ class BrowserManager:
         else:
             raise ValueError("Comando inválido.")
 
+    async def discover(self, platform, query, limit, posts=True, source_url=None):
+        from .portal_discovery import collect
+
+        if platform in self.leases or platform in self.busy:
+            raise ValueError("Libere o controle do portal para a busca automática.")
+        self.busy.add(platform)
+        try:
+            context = await self.context(platform)
+            self.job_ids.pop(platform, None)
+            self.upload_fields.pop(platform, None)
+            page = self.pages.get(platform)
+            if not page or page.is_closed():
+                page = await context.new_page()
+            self.pages[platform] = page
+            try:
+                return await collect(page, platform, query, limit, posts, source_url)
+            except BrowserError:
+                raise ValueError(
+                    "O portal não concluiu a busca. Confira login, conexão e layout no navegador."
+                ) from None
+            finally:
+                await self.save(platform)
+        finally:
+            self.busy.discard(platform)
+
+    async def wizard(
+        self, platform, url, profile, pdf, submit=False, before_submit=None, job_id=None
+    ):
+        from .portal_wizard import fill_wizard
+
+        if platform in self.leases or platform in self.busy:
+            raise ValueError(
+                "Libere o controle do portal antes da candidatura automática."
+            )
+        self.busy.add(platform)
+        self.handoffs.pop(platform, None)
+        self.job_ids[platform] = job_id
+        try:
+            context = await self.context(platform)
+            for old_page in list(context.pages):
+                await old_page.close()
+            page = await context.new_page()
+            self.pages[platform] = page
+            try:
+                await page.goto(url, wait_until="domcontentloaded", timeout=45000)
+                result = await fill_wizard(
+                    page, platform, profile, pdf, submit, before_submit
+                )
+            except BrowserError:
+                if platform not in self.handoffs:
+                    raise ValueError(
+                        "O portal mudou ou exige intervenção no navegador."
+                    ) from None
+                result = {
+                    "status": "pending",
+                    "reason": "Destino externo identificado. Abra o portal correspondente.",
+                }
+            await self.save(platform)
+            return result
+        finally:
+            self.busy.discard(platform)
+
     async def inhire(self, url, profile, pdf, submit=False, before_submit=None):
         from .portal_forms import fill_inhire
 
@@ -302,6 +484,8 @@ class BrowserManager:
                 "Libere o navegador InHire antes de executar a candidatura."
             )
         self.busy.add(platform)
+        self.job_ids.pop(platform, None)
+        self.upload_fields.pop(platform, None)
         try:
             context = await self.context(platform)
             for old_page in list(context.pages):

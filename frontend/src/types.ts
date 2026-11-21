@@ -65,15 +65,19 @@ export type Job = JobInput & {
   destination?: string;
   pending_reason?: string;
   browser_confirmed?: boolean;
+  archived?: boolean;
   pending_code?: string;
   origins?: { url: string; platform: string; source: string }[];
 };
 export type Settings = {
   search_platforms: string[];
   allowed_destinations: string[];
+  browser_search_queries: string[];
+  linkedin_posts_enabled: boolean;
+  experimental_portal_submission: boolean;
   auto_classify_areas: boolean;
   run_time_limit_minutes: number;
-  mode: "review" | "automatic";
+  mode: "manual" | "review" | "automatic";
   threshold: number;
   minimum_confidence: number;
   daily_limit: number;
@@ -128,6 +132,23 @@ export type Followup = {
   method?: string;
 };
 export type AppState = {
+  worklist: {
+    items: {
+      job_id: string;
+      score: number;
+      confidence: number;
+      destination: string;
+      automatic_available: boolean;
+      destination_enabled: boolean;
+    }[];
+    summary: {
+      eligible: number;
+      stale: number;
+      blocked: number;
+      below_threshold: number;
+      archived: number;
+    };
+  };
   profile: Profile;
   settings: Settings;
   jobs: Job[];
@@ -137,6 +158,8 @@ export type AppState = {
     id: string;
     status: string;
     started_at: string;
+    action?: "collect" | "apply";
+    consolidated?: number;
     found?: number;
     eligible?: number;
     pending?: number;
@@ -168,6 +191,7 @@ export type AppState = {
     name: string;
     discovery: boolean;
     submission: boolean;
+    experimental?: boolean;
     reason: string;
   }[];
   metrics: {

@@ -3,6 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+  pull_request:
 jobs:
   windows:
     runs-on: windows-latest
@@ -35,14 +36,18 @@ jobs:
             if (-not $ok) { throw 'Executavel nao iniciou.' }
             $page = Invoke-WebRequest 'http://127.0.0.1:8765/'
             if ($page.Content -notmatch 'Application Assistant') { throw 'Interface ausente.' }
+            $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+            Invoke-RestMethod -Uri 'http://127.0.0.1:8765/api/setup' -Method Post -WebSession $session -Headers @{'X-AA-Request'='1'} -ContentType 'application/json' -Body '{"password":"ci-only-installer-password-123"}'
+            $browser = Invoke-RestMethod -Uri 'http://127.0.0.1:8765/api/browser/self-test' -Method Post -WebSession $session -Headers @{'X-AA-Request'='1'}
+            if (-not $browser.ok) { throw 'Chromium empacotado nao iniciou.' }
           } finally { Stop-Process -Id $process.Id -ErrorAction SilentlyContinue }
       - name: Gerar instalador
         shell: pwsh
         run: '& "C:/Program Files (x86)/Inno Setup 6/ISCC.exe" packaging/installer.iss'
       - uses: actions/upload-artifact@v4
         with:
-          name: ApplicationAssistant-Windows-0.3.0
+          name: ApplicationAssistant-Windows-0.4.0
           path: |
             dist/ApplicationAssistant/
-            dist/ApplicationAssistant-Setup-0.3.0.exe
+            dist/ApplicationAssistant-Setup-0.4.0-Windows-x64.exe
           retention-days: 14

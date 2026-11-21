@@ -1618,3 +1618,13 @@ footer {
   align-items: center;
   margin: 12px 0;
 }
+
+.worklist-card {
+  margin-top: 18px;
+}
+.vacancy-description {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 600px;
+  overflow: auto;
+}

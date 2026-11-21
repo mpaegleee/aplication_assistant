@@ -203,6 +203,8 @@ class Engine:
     def approve(self, id):
         with self.lock:
             j = self.require_job(id)
+            if j.get("archived"):
+                raise ValueError("Restaure a vaga arquivada antes de se candidatar.")
             if j["status"] in TERMINAL:
                 raise ValueError("Candidatura encerrada ou enviada.")
             self.valid_analysis(j)
@@ -219,9 +221,11 @@ class Engine:
         p, s, a = self.valid_analysis(j)
         return resume_pdf(p, a)
 
-    def send(self, id):
+    def send(self, id, automatic=False):
         with self.lock:
             j = self.require_job(id)
+            if j.get("archived"):
+                raise ValueError("Restaure a vaga arquivada antes de se candidatar.")
             if j["status"] in TERMINAL or j["status"] == "sending":
                 raise ValueError(
                     "Candidatura enviada, encerrada ou com resultado incerto; reenvio impedido."
@@ -242,11 +246,13 @@ class Engine:
                     "Já existe candidatura enviada, encerrada ou incerta para esse destino. Confira o histórico antes de continuar."
                 )
             p, s, a = self.valid_analysis(j)
+            if automatic and s["mode"] == "manual":
+                raise ValueError("Modo manual: envio automático cancelado.")
             if s["paused"]:
                 raise ValueError(
                     "Rotina pausada. Retome nas configurações antes de enviar."
                 )
-            if s["mode"] == "review" and not j.get("approved"):
+            if s["mode"] in ("review", "manual") and not j.get("approved"):
                 raise ValueError("Aprovação necessária para esta candidatura.")
             if "email" not in s["allowed_destinations"]:
                 raise ValueError("Destino e-mail não autorizado nas configurações.")
@@ -297,33 +303,43 @@ class Engine:
             )
             return j
 
-    def browser_apply(self, id, submit=False):
+    def browser_apply(self, id, submit=False, automatic=False):
         with self.lock:
             job = self.store.get("jobs", id)
             if not job:
                 raise ValueError("Vaga não encontrada.")
+            if job.get("archived"):
+                raise ValueError("Restaure a vaga arquivada antes de se candidatar.")
             if job["status"] in TERMINAL or job["status"] == "sending":
                 raise ValueError(
                     "Candidatura já tentada ou concluída. Confira o histórico."
                 )
             profile, settings, analysis = self.valid_analysis(job)
+            if automatic and settings["mode"] == "manual":
+                raise ValueError("Modo manual: envio automático cancelado.")
             if settings["paused"]:
                 raise ValueError(
                     "Retome a rotina antes de compartilhar dados com o portal."
                 )
-            if settings["mode"] == "review" and not job.get("approved"):
+            if settings["mode"] in ("review", "manual") and not job.get("approved"):
                 raise ValueError("Aprove esta candidatura antes de preencher o portal.")
             url = job.get("application_url") or job["url"]
+            destination = platform_for(url)
             if (
-                platform_for(url) != "inhire"
-                or "inhire" not in settings["allowed_destinations"]
+                destination not in ("inhire", "linkedin", "gupy", "indeed")
+                or destination not in settings["allowed_destinations"]
+            ):
+                raise ValueError("Habilite o portal nos destinos de candidatura.")
+            if (
+                destination != "inhire"
+                and not settings["experimental_portal_submission"]
             ):
                 raise ValueError(
-                    "Habilite InHire nos destinos. Este fluxo atende formulários diretos InHire."
+                    "Habilite os formulários experimentais nas configurações ou use a candidatura manual."
                 )
             from .browser import allowed_url
 
-            if not allowed_url(url, "inhire") or not self.browser:
+            if not allowed_url(url, destination) or not self.browser:
                 raise ValueError("Endereço ou navegador indisponível.")
             identity = application_identity(url)
             for other in self.store.all("jobs"):
@@ -348,9 +364,17 @@ class Engine:
                 self.valid_analysis(current)
                 config = self.settings()
                 if (
-                    config["paused"]
-                    or "inhire" not in config["allowed_destinations"]
-                    or (config["mode"] == "review" and not current.get("approved"))
+                    (automatic and config["mode"] == "manual")
+                    or config["paused"]
+                    or destination not in config["allowed_destinations"]
+                    or (
+                        destination != "inhire"
+                        and not config["experimental_portal_submission"]
+                    )
+                    or (
+                        config["mode"] in ("review", "manual")
+                        and not current.get("approved")
+                    )
                 ):
                     raise ValueError(
                         "Configuração ou aprovação alterada. Envio cancelado."
@@ -360,7 +384,7 @@ class Engine:
                     raise ValueError("Limite diário de tentativas atingido.")
                 job.update(
                     status="sending",
-                    destination="inhire",
+                    destination=destination,
                     attempted_at=now(),
                     browser_attempt=secrets.token_hex(16),
                     resume_snapshot=pdf.hex(),
@@ -372,7 +396,14 @@ class Engine:
 
             try:
                 result = self.browser.call(
-                    self.browser.inhire(url, profile, pdf, submit, intent), timeout=110
+                    (
+                        self.browser.inhire(url, profile, pdf, submit, intent)
+                        if destination == "inhire"
+                        else self.browser.wizard(
+                            destination, url, profile, pdf, submit, intent, job_id=id
+                        )
+                    ),
+                    timeout=150,
                 )
             except Exception:
                 if attempted:
@@ -395,7 +426,7 @@ class Engine:
                 job.update(
                     pending_reason="",
                     pending_code="",
-                    destination="inhire",
+                    destination=destination,
                     browser_confirmed=True,
                 )
                 record_stage(job, "receipt", "browser")
@@ -415,7 +446,9 @@ class Engine:
             self.store.event(id, result["reason"])
             return {"status": result["status"], "reason": result["reason"]}
 
-    def start_run(self):
+    def start_run(self, action="apply"):
+        if action not in ("collect", "apply"):
+            raise ValueError("Tipo de execução inválido.")
         if self.running:
             raise ValueError("Já existe uma execução em andamento.")
         with self.lock:
@@ -424,7 +457,7 @@ class Engine:
             if self.settings()["paused"]:
                 raise ValueError("Retome a rotina nas configurações.")
             self.running = True
-        self.thread = threading.Thread(target=self.run, daemon=True)
+        self.thread = threading.Thread(target=self.run, args=(action,), daemon=True)
         self.thread.start()
 
     def pending(self, job, code, message):
@@ -434,10 +467,12 @@ class Engine:
         self.store.put("jobs", job, job["id"])
         return code
 
-    def process(self, job):
+    def process(self, job, collect_only=False):
         settings = self.settings()
         if job["status"] in TERMINAL or job["status"] == "sending":
             return "already_submitted"
+        if job.get("archived"):
+            return "archived"
         if settings["paused"] or self.stop.is_set():
             return "paused"
         job = self.analyze(job["id"])
@@ -449,6 +484,13 @@ class Engine:
                 "below_threshold",
                 "Aderência ou confiança abaixo do limite configurado.",
             )
+        settings = self.settings()
+        if collect_only or settings["mode"] == "manual":
+            return self.pending(
+                job,
+                "manual_ready",
+                "Vaga aderente consolidada. Pronta para candidatura manual na aplicação.",
+            )
         destination = (
             "email"
             if email_eligible(job)
@@ -459,12 +501,21 @@ class Engine:
             return self.pending(
                 job, "destination_disabled", "Destino não autorizado: " + destination
             )
-        if destination == "inhire":
-            if settings["mode"] == "review" and not job.get("approved"):
+        if destination in ("inhire", "linkedin", "gupy", "indeed"):
+            if (
+                destination != "inhire"
+                and not settings["experimental_portal_submission"]
+            ):
+                return self.pending(
+                    job,
+                    "experimental_disabled",
+                    "Formulário automático experimental desabilitado. Use a candidatura manual ou habilite nas configurações.",
+                )
+            if settings["mode"] in ("review", "manual") and not job.get("approved"):
                 return self.pending(
                     job, "approval_required", "Esta candidatura aguarda aprovação."
                 )
-            result = self.browser_apply(job["id"], submit=True)
+            result = self.browser_apply(job["id"], submit=True, automatic=True)
             return (
                 "sent"
                 if result["status"] == "confirmed"
@@ -484,21 +535,73 @@ class Engine:
                 "email_disabled",
                 "Habilite o envio SMTP para concluir esta candidatura.",
             )
-        if settings["mode"] == "review" and not job.get("approved"):
+        if settings["mode"] in ("review", "manual") and not job.get("approved"):
             return self.pending(
                 job,
                 "approval_required",
                 "Esta candidatura aguarda aprovação conforme o modo escolhido.",
             )
         self.store.put("jobs", job, job["id"])
-        self.send(job["id"])
+        self.send(job["id"], automatic=True)
         return "sent"
 
-    def run(self):
+    def portal_records(self, settings, platform, query="", source_url=None):
+        if not self.browser:
+            raise ValueError("Navegador interno indisponível.")
+        if not source_url and not self.store.get("browser_sessions", platform):
+            raise ValueError(
+                "Entre em "
+                + platform
+                + " no navegador interno, salve a sessão e libere o controle."
+            )
+        return self.browser.call(
+            self.browser.discover(
+                platform,
+                query,
+                settings["max_jobs_per_run"],
+                settings["linkedin_posts_enabled"],
+                source_url,
+            ),
+            timeout=180,
+        )
+
+    def import_portal_records(self, records, settings, run, entry, seen, interrupted):
+        from .portal_discovery import extract_record
+
+        for raw in records:
+            if interrupted() or len(seen) >= settings["max_jobs_per_run"]:
+                break
+            entry["found"] += 1
+            run["found"] += 1
+            try:
+                data = extract_record(self.store, settings, raw)
+                if not data:
+                    continue
+                job, created = self.add_job(
+                    data,
+                    {
+                        "url": raw["url"],
+                        "platform": raw["platform"],
+                        "source": entry["name"],
+                        "kind": raw["kind"],
+                    },
+                )
+                seen.add(job["id"])
+                entry["new"] += int(created)
+                entry["duplicates"] += int(not created)
+                run["imported"] += int(created)
+                run["duplicates"] += int(not created)
+            except ValueError as exc:
+                run["errors"].append("Publicação/vaga pendente: " + str(exc)[:350])
+
+    def run(self, action="apply"):
+        collect_only = action == "collect" or self.settings()["mode"] == "manual"
         run = {
             "id": secrets.token_hex(12),
             "started_at": now(),
+            "action": "collect" if collect_only else "apply",
             "status": "running",
+            "consolidated": 0,
             "found": 0,
             "imported": 0,
             "duplicates": 0,
@@ -532,6 +635,34 @@ class Engine:
                         + capabilities[platform]["reason"]
                     )
             seen = set()
+            queries = settings["browser_search_queries"] or self.profile()["roles"][:3]
+            for platform in ("linkedin", "indeed"):
+                if platform not in settings["search_platforms"]:
+                    continue
+                for query in queries:
+                    if interrupted() or len(seen) >= settings["max_jobs_per_run"]:
+                        break
+                    entry = {
+                        "name": platform + ": " + query,
+                        "platform": platform,
+                        "found": 0,
+                        "new": 0,
+                        "duplicates": 0,
+                        "status": "running",
+                    }
+                    run["sources"].append(entry)
+                    try:
+                        records = self.portal_records(settings, platform, query)
+                        self.import_portal_records(
+                            records, settings, run, entry, seen, interrupted
+                        )
+                        entry["status"] = "completed"
+                    except ValueError as exc:
+                        entry["status"] = "pending"
+                        run["errors"].append(
+                            capabilities[platform]["name"] + ": " + str(exc)[:350]
+                        )
+                    self.store.put("runs", run, run["id"])
             for source in settings["sources"]:
                 if interrupted():
                     break
@@ -554,6 +685,15 @@ class Engine:
                 run["sources"].append(entry)
                 try:
                     address = source_address(source)
+                    if platform == "gupy":
+                        records = self.portal_records(
+                            settings, platform, source_url=address
+                        )
+                        self.import_portal_records(
+                            records, settings, run, entry, seen, interrupted
+                        )
+                        entry["status"] = "completed"
+                        continue
                     allowed = list(settings["allowed_domains"])
                     if source.get("kind") == "greenhouse":
                         allowed.append("boards-api.greenhouse.io")
@@ -584,6 +724,9 @@ class Engine:
                         run["imported"] += int(created)
                         run["duplicates"] += int(not created)
                     entry["status"] = "completed"
+                except ValueError as exc:
+                    entry["status"] = "pending"
+                    run["errors"].append(source["name"] + ": " + str(exc)[:350])
                 except Exception:
                     entry["status"] = "failed"
                     run["errors"].append(
@@ -592,7 +735,11 @@ class Engine:
                 self.store.put("runs", run, run["id"])
             jobs = []
             for job in self.store.all("jobs"):
-                if job["status"] in TERMINAL or job["status"] == "sending":
+                if (
+                    job["status"] in TERMINAL
+                    or job["status"] == "sending"
+                    or job.get("archived")
+                ):
                     continue
                 origins = job.get("origins") or [
                     {"platform": platform_for(job.get("url", ""), "company")}
@@ -616,15 +763,21 @@ class Engine:
                 run["items"].append(item)
                 self.store.put("runs", run, run["id"])
                 try:
-                    result = self.process(job)
+                    result = self.process(job, collect_only=collect_only)
+                    run["consolidated"] += int(result == "manual_ready")
                     latest = self.require_job(job["id"])
                     run["sent"] += int(result == "sent")
                     run["pending"] += int(
-                        result not in ["sent", "already_submitted", "paused"]
+                        result
+                        not in ["sent", "already_submitted", "paused", "manual_ready"]
                     )
                     item.update(
                         result=result,
-                        stage="sent" if result == "sent" else "pending",
+                        stage="sent"
+                        if result == "sent"
+                        else "consolidated"
+                        if result == "manual_ready"
+                        else "pending",
                         destination=latest.get("destination", ""),
                     )
                 except Exception as exc:

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import type { AppState } from "./types";
 
@@ -8,16 +8,23 @@ type Session = {
   saved_at?: string;
   busy: boolean;
   controlled: boolean;
+  job_id?: string;
+  handoff?: { platform: string };
 };
 export function BrowserPage({
   state,
   refresh,
+  target,
 }: {
   state: AppState;
   refresh: () => Promise<unknown>;
+  target?: { platform: string; job_id: string } | null;
 }) {
-  const [platform, setPlatform] = useState("linkedin");
+  const [platform, setPlatform] = useState(target?.platform || "linkedin");
   const [url, setUrl] = useState("");
+  const [files, setFiles] = useState<
+    { id: string; label: string; accept: string }[]
+  >([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [image, setImage] = useState("");
   const [controlled, setControlled] = useState(false);
@@ -31,12 +38,18 @@ export function BrowserPage({
     if (socket.current?.readyState === WebSocket.OPEN)
       socket.current.send(JSON.stringify(value));
   };
-  const load = () => api<Session[]>("/browser").then(setSessions);
+  const load = useCallback(
+    () => api<Session[]>("/browser").then(setSessions),
+    [],
+  );
   useEffect(() => {
+    const timer = setInterval(() => load().catch(() => {}), 4000);
     load().catch(() => setMessage("Não foi possível consultar as sessões."));
-  }, []);
+    return () => clearInterval(timer);
+  }, [load]);
   useEffect(() => {
     setControlled(false);
+    setFiles([]);
     setConnected(false);
     setImage("");
     setMessage("");
@@ -55,6 +68,17 @@ export function BrowserPage({
       } else {
         const value = JSON.parse(event.data);
         if (value.error) setMessage(value.error);
+        if (value.notice) {
+          setMessage(value.notice);
+          setFiles([]);
+        }
+        if (Array.isArray(value.file_fields)) {
+          setFiles(value.file_fields);
+          if (!value.file_fields.length)
+            setMessage(
+              "Nenhum campo de arquivo encontrado. Abra a etapa do currículo e tente novamente.",
+            );
+        }
         if (typeof value.controlled === "boolean") {
           setControlled(value.controlled);
           load().catch(() => {});
@@ -71,7 +95,7 @@ export function BrowserPage({
       ws.close();
       if (previous) URL.revokeObjectURL(previous);
     };
-  }, [platform]);
+  }, [platform, load]);
   async function action(task: () => Promise<unknown>) {
     setBusy(true);
     setMessage("");
@@ -88,9 +112,27 @@ export function BrowserPage({
       setBusy(false);
     }
   }
+  const current = sessions.find((s) => s.id === platform);
+  const currentJob = state.jobs.find((j) => j.id === current?.job_id);
   return (
     <section className="card browser-panel">
       <h2>Navegador da aplicação</h2>
+      <button
+        disabled={busy}
+        onClick={() =>
+          action(async () => {
+            const test = await api<{ ok: boolean; version: string }>(
+              "/browser/self-test",
+              "POST",
+            );
+            if (!test.ok)
+              throw new Error("Navegador não concluiu o diagnóstico.");
+            return { reason: "Chromium disponível: " + test.version };
+          })
+        }
+      >
+        Testar navegador instalado
+      </button>
       <p>
         Faça login diretamente no portal. Ao liberar o controle ou sair desta
         tela, os cookies e dados de sessão do portal são salvos criptografados
@@ -110,6 +152,8 @@ export function BrowserPage({
             <option value="gupy">Gupy</option>
             <option value="indeed">Indeed</option>
             <option value="inhire">InHire</option>
+            <option value="greenhouse">Greenhouse</option>
+            <option value="lever">Lever</option>
           </select>
         </label>
         <label>
@@ -267,6 +311,77 @@ export function BrowserPage({
         </label>
         <button disabled={!controlled}>Digitar no portal</button>
       </form>
+      {current?.handoff && (
+        <div className="notice">
+          <p>
+            A vaga direcionou para {current.handoff.platform}. Libere o controle
+            e continue no navegador desse portal; a conta e a sessão são
+            separadas.
+          </p>
+          <button
+            disabled={controlled || busy}
+            onClick={() =>
+              action(async () => {
+                const next = await api<{ platform: string }>(
+                  `/browser/${platform}/handoff`,
+                  "POST",
+                );
+                setPlatform(next.platform);
+                return next;
+              })
+            }
+          >
+            Continuar no portal de destino
+          </button>
+        </div>
+      )}
+      {currentJob && (
+        <section className="panel">
+          <h3>Currículo para {currentJob.title}</h3>
+          <p>
+            {currentJob.company}. Abra a etapa de anexo, assuma o controle e
+            localize o campo do currículo. O envio final continua sob seu
+            controle.
+          </p>
+          <a
+            href={`/api/jobs/${currentJob.id}/resume`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Conferir PDF específico desta vaga
+          </a>
+          <div className="button-row">
+            <button
+              disabled={!controlled}
+              onClick={() => {
+                setFiles([]);
+                send({ type: "file-fields" });
+              }}
+            >
+              Localizar campo de currículo
+            </button>
+          </div>
+          {files.map((field) => (
+            <div key={field.id}>
+              <strong>{field.label}</strong>
+              <small> {field.accept || "Formato não informado"}</small>
+              <button
+                disabled={!controlled}
+                aria-label={"Anexar currículo em " + field.label}
+                onClick={() =>
+                  send({
+                    type: "attach-resume",
+                    job_id: currentJob.id,
+                    field_id: field.id,
+                  })
+                }
+              >
+                Anexar currículo neste campo
+              </button>
+            </div>
+          ))}
+        </section>
+      )}
       <hr />
       <h3>Candidaturas InHire</h3>
       <p>
@@ -279,8 +394,9 @@ export function BrowserPage({
       </p>
       <p>
         LinkedIn, Gupy e Indeed já podem ser abertos para login e operação
-        manual neste navegador. A busca e o preenchimento automático desses três
-        portais ainda não estão disponíveis.
+        manual neste navegador. LinkedIn e Indeed têm busca experimental; o
+        preenchimento e envio automático desses portais ainda não está
+        disponível.
       </p>
       {state.jobs
         .filter((j) => (j.application_url || j.url).includes(".inhire.app/"))

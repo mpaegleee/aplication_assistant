@@ -119,7 +119,7 @@ def test_ats_destination_not_misrepresented_as_sent(app, prepared):
     settings["allowed_destinations"] = ["gupy"]
     settings["mode"] = "automatic"
     app.state.store.put("settings", settings)
-    assert engine.process(j) == "connector_unavailable"
+    assert engine.process(j) == "experimental_disabled"
     latest = engine.require_job(prepared)
     assert (
         latest["destination"] == "gupy"

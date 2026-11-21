@@ -9,6 +9,8 @@ from playwright.async_api import Error as BrowserError
 from pydantic import Field
 
 from .browser import PORTALS
+from .connectors import platform_for
+from .engine import TERMINAL
 from .models import Model
 
 
@@ -18,6 +20,10 @@ class OpenBrowser(Model):
 
 
 def install_browser_routes(app, manager, engine, auth):
+    @app.post("/api/browser/self-test", dependencies=[Depends(auth)])
+    def self_test():
+        return manager.call(manager.self_test())
+
     @app.get("/api/browser", dependencies=[Depends(auth)])
     def status():
         return manager.call(manager.status())
@@ -25,6 +31,23 @@ def install_browser_routes(app, manager, engine, auth):
     @app.post("/api/browser/open", dependencies=[Depends(auth)])
     def open_browser(payload: OpenBrowser):
         return manager.call(manager.open(payload.platform, payload.url))
+
+    @app.post("/api/jobs/{id}/browser/open", dependencies=[Depends(auth)])
+    def open_job(id: str):
+        job = engine.require_job(id)
+        engine.valid_analysis(job)
+        url = job.get("application_url") or job.get("url", "")
+        platform = platform_for(url)
+        if platform not in PORTALS:
+            raise ValueError(
+                "Este site ainda não tem navegador integrado. Use o link externo da vaga."
+            )
+        manager.call(manager.open(platform, url, id))
+        return {"platform": platform, "job_id": id}
+
+    @app.post("/api/browser/{platform}/handoff", dependencies=[Depends(auth)])
+    def handoff(platform: str):
+        return manager.call(manager.handoff(platform))
 
     @app.delete("/api/browser/{platform}", dependencies=[Depends(auth)])
     def forget(platform: str):
@@ -114,12 +137,44 @@ def install_browser_routes(app, manager, engine, auth):
                             )
                         )
                         await notify({"controlled": False})
+                    elif message.get("type") == "file-fields":
+                        fields = await call(manager.file_fields(platform, owner))
+                        await notify({"file_fields": fields})
+                    elif message.get("type") == "attach-resume":
+                        job_id = str(message.get("job_id", ""))
+                        job = engine.require_job(job_id)
+                        if (
+                            job["status"] in TERMINAL
+                            or job["status"] == "sending"
+                            or job.get("archived")
+                        ):
+                            raise ValueError(
+                                "Candidatura já tentada, encerrada ou arquivada."
+                            )
+                        engine.valid_analysis(job)
+                        pdf = engine.pdf(job_id)
+                        await call(
+                            manager.attach(
+                                platform,
+                                owner,
+                                job_id,
+                                str(message.get("field_id", "")),
+                                pdf,
+                            )
+                        )
+                        await notify(
+                            {
+                                "notice": "Currículo anexado. Confira os dados e conclua o envio no portal."
+                            }
+                        )
                     else:
                         await call(manager.control(platform, owner, message))
-                except (ValueError, KeyError, TypeError):
+                except ValueError as exc:
+                    await notify({"error": str(exc)})
+                except (KeyError, TypeError):
                     await notify(
                         {
-                            "error": "Comando indisponível. Confira o controle e a página do navegador."
+                            "error": "Comando indisponível. Confira o controle, a validade da análise e a página do navegador."
                         }
                     )
                 except (BrowserError, OSError, RuntimeError):

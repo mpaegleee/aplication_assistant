@@ -31,6 +31,7 @@ import {
   Inbox,
 } from "lucide-react";
 import { api } from "./api";
+import { Worklist } from "./Worklist";
 import { BrowserPage } from "./BrowserPage";
 import { AISettings } from "./AISettings";
 import { AutomationPanel, RunSummary } from "./Automation";
@@ -197,6 +198,10 @@ function Modal({
   );
 }
 function App() {
+  const [browserTarget, setBrowserTarget] = useState<{
+    platform: string;
+    job_id: string;
+  } | null>(null);
   const [session, setSession] = useState<{
     configured: boolean;
     authenticated: boolean;
@@ -212,7 +217,7 @@ function App() {
   const refresh = useCallback(async () => {
     setState(
       await api<AppState>("/state").then((next) => {
-        if (!next.connectors || !next.metrics)
+        if (!next.connectors || !next.metrics || !next.worklist)
           throw new Error(
             "Atualização aplicada. Encerre a janela do Iniciar.cmd, abra novamente e recarregue esta página.",
           );
@@ -371,6 +376,7 @@ function App() {
     ["dashboard", "Visão geral", LayoutDashboard],
     ["autopilot", "Rotina automática", Play],
     ["profile", "Meu perfil", UserRound],
+    ["worklist", "Vagas consolidadas", CheckCircle2],
     ["jobs", "Oportunidades", Search],
     ["applications", "Candidaturas", BriefcaseBusiness],
     ["followups", "Retornos", Inbox],
@@ -383,6 +389,7 @@ function App() {
     dashboard: "Visão geral",
     autopilot: "Rotina automática",
     profile: "Meu perfil",
+    worklist: "Vagas consolidadas",
     jobs: "Oportunidades",
     applications: "Minhas candidaturas",
     followups: "Retornos",
@@ -573,6 +580,18 @@ function App() {
               applications={page === "applications"}
             />
           )}
+          {page === "worklist" && (
+            <Worklist
+              state={state}
+              busy={busy}
+              act={act}
+              go={setPage}
+              openBrowser={(target) => {
+                setBrowserTarget(target);
+                setPage("browser");
+              }}
+            />
+          )}
           {page === "settings" && (
             <SettingsPage state={state} act={act} busy={busy} />
           )}
@@ -583,14 +602,18 @@ function App() {
             <Followups state={state} act={act} busy={busy} />
           )}
           {page === "browser" && (
-            <BrowserPage state={state} refresh={refresh} />
+            <BrowserPage
+              state={state}
+              refresh={refresh}
+              target={browserTarget}
+            />
           )}
           {page === "help" && <Help />}
         </main>
         <footer>
           Application Assistant{" "}
           <span>Feito para tornar a busca por emprego mais humana.</span>
-          <span>v0.3.0 · teste local</span>
+          <span>v0.4.0 · teste local</span>
         </footer>
       </div>
       {toast && (
@@ -1958,19 +1981,23 @@ function SettingsPage({ state, act, busy }: Common) {
           <>
             <h2>Você define a autonomia</h2>
             <p>
-              O envio automático funciona por e-mail com instrução explícita no
-              anúncio. Sites ficam no fluxo assistido nesta versão.
+              O modo manual consolida a fila. Os modos com automação usam os
+              destinos habilitados; formulários experimentais exigem
+              configuração própria.
             </p>
             <Field label="Modo de candidatura">
               <select
                 value={s.mode}
                 onChange={(e) => change("mode", e.target.value)}
               >
+                <option value="manual">
+                  Somente consolidar; eu me candidato
+                </option>
                 <option value="review">
                   Quero revisar e aprovar cada candidatura
                 </option>
                 <option value="automatic">
-                  Quero envio automático por e-mail
+                  Quero envio automático nos conectores habilitados
                 </option>
               </select>
             </Field>
@@ -2454,8 +2481,7 @@ function SchedulePage({ state, act, busy }: Common) {
           className="panel"
           onSubmit={(e) => {
             e.preventDefault();
-            const { ai_key_configured, smtp_password_configured, ...payload } =
-              s;
+            const payload = editableSettings(s);
             act(() => api("/settings", "PUT", payload), "Agenda salva.");
           }}
         >
