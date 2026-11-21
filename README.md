@@ -23,11 +23,11 @@ A rotina recupera o horário perdido no mesmo dia, alterna vagas já processadas
 - Sessão vencida, CAPTCHA, criação de conta, botão ambíguo e perguntas desconhecidas geram pendência. Não existe automação universal de qualquer site. Um resultado incerto nunca é repetido automaticamente.
 - Acompanhamento por histórico e IMAP opcional.
 
-**Validação:** testes automatizados e Chromium real com sites de teste controlados. Ainda não foram realizadas candidaturas reais nem validação de todos os layouts dos portais. O instalador Windows é compilado em Linux e precisa do teste nativo antes de uma distribuição estável.
+**Validação.** Os workflows compilam os pacotes em Windows e Linux e verificam a atualização da versão anterior com dados preservados. Os testes de navegador usam formulários controlados. A automação em portais reais continua em validação. O instalador Windows ainda não tem assinatura Authenticode.
 
 ## Instalar
 
-Os artefatos preparados para a seção **Releases** são:
+Os downloads ficam em [GitHub Releases](https://github.com/mpaegleee/aplication_assistant/releases).
 
 | Sistema | Arquivo | Como usar |
 |---|---|---|

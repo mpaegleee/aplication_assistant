@@ -1,6 +1,6 @@
 # Guia do usuário — Application Assistant
 
-Para fila manual, busca em publicações, automação e instaladores Windows/Linux, consulte **ATUALIZACAO-0.6.0.md**. Os guias 0.2 e 0.3 descrevem versões anteriores; as capacidades novas e limitações atuais estão no guia 0.5.
+Para fila manual, busca em publicações, automação e instaladores Windows/Linux, consulte **ATUALIZACAO-0.6.0.md**. Os guias 0.2 e 0.3 descrevem versões anteriores; o guia da versão 0.6.0 explica a configuração, a coleta e a atualização.
 
 ## Para que serve
 Organizar sua busca de emprego no Brasil, comparar vagas com seu perfil, preparar currículos e acompanhar candidaturas. Uma pessoa por instalação. O programa é gratuito; serviços de IA escolhidos por você podem cobrar pelo uso.
