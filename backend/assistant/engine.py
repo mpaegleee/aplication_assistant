@@ -303,7 +303,7 @@ class Engine:
             )
             return j
 
-    def browser_apply(self, id, submit=False, automatic=False):
+    def browser_apply(self, id, submit=False, automatic=False, *, routed_url=None):
         with self.lock:
             job = self.store.get("jobs", id)
             if not job:
@@ -323,7 +323,7 @@ class Engine:
                 )
             if settings["mode"] in ("review", "manual") and not job.get("approved"):
                 raise ValueError("Aprove esta candidatura antes de preencher o portal.")
-            url = job.get("application_url") or job["url"]
+            url = routed_url or job.get("application_url") or job["url"]
             destination = platform_for(url)
             if (
                 destination not in ("inhire", "linkedin", "gupy", "indeed")
@@ -346,15 +346,21 @@ class Engine:
                 if (
                     other["id"] != id
                     and other["status"] in TERMINAL | {"sending"}
-                    and application_identity(
-                        other.get("application_url") or other.get("url", "")
-                    )
-                    == identity
+                    and identity
+                    in {
+                        application_identity(
+                            other.get("application_url") or other.get("url", "")
+                        ),
+                        other.get("attempt_identity"),
+                    }
                 ):
                     raise ValueError(
                         "Já existe tentativa para esta vaga em outro registro."
                     )
             pdf = resume_pdf(profile, analysis)
+            form_profile = dict(profile)
+            if settings["share_with_enabled_portals"]:
+                form_profile["authorized_portal"] = destination
             attempted = False
 
             def intent():
@@ -365,6 +371,10 @@ class Engine:
                 config = self.settings()
                 if (
                     (automatic and config["mode"] == "manual")
+                    or (
+                        settings["share_with_enabled_portals"]
+                        and not config["share_with_enabled_portals"]
+                    )
                     or config["paused"]
                     or destination not in config["allowed_destinations"]
                     or (
@@ -386,6 +396,7 @@ class Engine:
                     status="sending",
                     destination=destination,
                     attempted_at=now(),
+                    attempt_identity=identity,
                     browser_attempt=secrets.token_hex(16),
                     resume_snapshot=pdf.hex(),
                     submitted_profile=profile,
@@ -397,10 +408,16 @@ class Engine:
             try:
                 result = self.browser.call(
                     (
-                        self.browser.inhire(url, profile, pdf, submit, intent)
+                        self.browser.inhire(url, form_profile, pdf, submit, intent)
                         if destination == "inhire"
                         else self.browser.wizard(
-                            destination, url, profile, pdf, submit, intent, job_id=id
+                            destination,
+                            url,
+                            form_profile,
+                            pdf,
+                            submit,
+                            intent,
+                            job_id=id,
                         )
                     ),
                     timeout=150,
@@ -413,6 +430,25 @@ class Engine:
                     )
                     self.store.put("jobs", job, id)
                 raise
+            if result["status"] == "handoff" and not attempted:
+                from .portal_wizard import external_vacancy
+
+                target = result.get("url", "")
+                if (
+                    not routed_url
+                    and automatic
+                    and self.settings()["mode"] == "automatic"
+                    and destination in ("linkedin", "indeed")
+                    and external_vacancy(target)
+                ):
+                    self.store.event(
+                        id, "Destino identificado no anúncio: " + platform_for(target)
+                    )
+                    return self.browser_apply(id, submit, automatic, routed_url=target)
+                result = {
+                    "status": "pending",
+                    "reason": "O anúncio encaminha para outro portal. Confira o destino.",
+                }
             if result["status"] == "confirmed":
                 self.store.put(
                     "browser_proofs",
@@ -749,8 +785,8 @@ class Engine:
                 ):
                     continue
                 jobs.append(job)
-                if len(jobs) >= settings["max_jobs_per_run"]:
-                    break
+            jobs.sort(key=lambda j: j.get("last_processed_at", ""))
+            jobs = jobs[: settings["max_jobs_per_run"]]
             for index, job in enumerate(jobs):
                 if interrupted():
                     break
@@ -796,6 +832,10 @@ class Engine:
                     item.update(result=code, stage="pending")
                     run["pending"] += 1
                 latest = self.require_job(job["id"])
+                with self.lock:
+                    latest = self.require_job(job["id"])
+                    latest["last_processed_at"] = now()
+                    self.store.put("jobs", latest, job["id"])
                 analysis = latest.get("analysis") or {}
                 run["analyzed"] += int(analysis.get("score") is not None)
                 run["eligible"] += int(
@@ -858,7 +898,7 @@ class Engine:
                 s["paused"]
                 or not s["schedule_enabled"]
                 or local.weekday() not in s["weekdays"]
-                or local.strftime("%H:%M") != s["time"]
+                or local.strftime("%H:%M") < s["time"]
             ):
                 continue
             key = local.date().isoformat() + " " + s["time"] + " " + s["timezone"]
@@ -867,8 +907,8 @@ class Engine:
                 or self.running
             ):
                 continue
-            self.store.put("schedule", {"last": key})
             try:
                 self.start_run()
+                self.store.put("schedule", {"last": key})
             except ValueError:
                 pass

@@ -75,6 +75,7 @@ export type Settings = {
   browser_search_queries: string[];
   linkedin_posts_enabled: boolean;
   experimental_portal_submission: boolean;
+  share_with_enabled_portals: boolean;
   auto_classify_areas: boolean;
   run_time_limit_minutes: number;
   mode: "manual" | "review" | "automatic";

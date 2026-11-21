@@ -613,7 +613,7 @@ function App() {
         <footer>
           Application Assistant{" "}
           <span>Feito para tornar a busca por emprego mais humana.</span>
-          <span>v0.4.0 · teste local</span>
+          <span>v0.5.0 · teste local</span>
         </footer>
       </div>
       {toast && (

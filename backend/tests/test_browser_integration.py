@@ -392,3 +392,74 @@ document.querySelector('#next').onclick=()=>{
             await browser.close()
 
     asyncio.run(run())
+
+
+def test_automatic_run_linkedin_to_gupy_receipt_and_duplicate(
+    app, settings, job, profile, analysis, monkeypatch
+):
+    engine = app.state.engine
+    manager = engine.browser
+    source = "https://www.linkedin.com/jobs/view/4476691267"
+    board = "https://essentiagroup.gupy.io/job/eyJqb2JJZCI6MTI2NzMyMDEsInNvdXJjZSI6ImxpbmtlZGluIn0=?jobBoardSource=linkedin"
+    path = "/candidates/jobs/12673201/apply?jobBoardSource=linkedin"
+    settings.update(
+        mode="automatic",
+        search_platforms=["linkedin"],
+        allowed_destinations=["linkedin", "gupy"],
+        experimental_portal_submission=True,
+    )
+    app.state.store.put("settings", settings)
+    profile["answers"] = [
+        {
+            "question": "Autorizar envio de dados para essentiagroup.gupy.io",
+            "answer": "Sim",
+        }
+    ]
+    app.state.store.put("profile", profile)
+    monkeypatch.setattr("assistant.ai.AI.analyze", lambda *args: analysis)
+    job.update(
+        url=source,
+        application_url="",
+        recipient="",
+        description="Desenvolver APIs em Python.",
+    )
+    original, _ = engine.add_job(job)
+    calls = []
+
+    async def setup():
+        li = await manager.context("linkedin")
+        await li.route(
+            "**/*",
+            lambda r: r.fulfill(
+                content_type="text/html",
+                body=f'<main><a href="{board}">Candidatar-se</a></main>',
+            ),
+        )
+        gupy = await manager.context("gupy")
+
+        async def route(r):
+            calls.append(r.request.url)
+            content = (
+                f'<main><a href="{path}">Candidatar-se</a><a href="{path}">Candidatar-se</a></main>'
+                if "/job/" in r.request.url
+                else """<main><label>Nome completo<input required></label><label>Currículo<input type=file></label>
+                       <button onclick="if(document.querySelector('input').value &amp;&amp; document.querySelector('[type=file]').files.length) this.parentNode.textContent='Recebemos sua candidatura'">Enviar candidatura</button></main>"""
+            )
+            await r.fulfill(content_type="text/html; charset=utf-8", body=content)
+
+        await gupy.route("**/*", route)
+
+    try:
+        manager.call(setup())
+        engine.run()
+        saved = engine.require_job(original["id"])
+        assert saved["status"] == "receipt", saved.get("pending_reason")
+        assert saved["attempt_identity"] == "gupy:12673201"
+        assert app.state.store.all("runs")[0]["sent"] == 1
+        assert app.state.store.get("browser_proofs", original["id"])["image"]
+        direct, _ = engine.add_job({**job, "url": board})
+        with pytest.raises(ValueError, match="tentativa"):
+            engine.process(direct)
+        assert len([url for url in calls if "/candidates/jobs/" in url]) == 1
+    finally:
+        manager.close()

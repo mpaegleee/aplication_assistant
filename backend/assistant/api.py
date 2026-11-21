@@ -122,7 +122,7 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
 
     app = FastAPI(
         title="Application Assistant",
-        version="0.4.0",
+        version="0.5.0",
         lifespan=lifespan,
         docs_url=None,
         redoc_url=None,
@@ -213,7 +213,7 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
 
     @app.get("/api/health")
     def health():
-        return {"ok": True, "version": "0.4.0"}
+        return {"ok": True, "version": "0.5.0"}
 
     @app.get("/api/session")
     def session(request: Request):
@@ -257,7 +257,7 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
             j.pop("submitted_profile", None)
             j["email_eligible"] = email_eligible(j)
         return {
-            "version": "0.4.0",
+            "version": "0.5.0",
             "profile": engine.profile(),
             "settings": settings,
             "jobs": jobs,

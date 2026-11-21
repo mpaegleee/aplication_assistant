@@ -232,3 +232,96 @@ def test_experimental_portal_submission_requires_flag_and_records_receipt(
     saved = app.state.engine.require_job(id)
     assert saved["destination"] == "gupy" and saved["status"] == "receipt"
     assert saved["browser_attempt"] and saved["resume_snapshot"]
+
+
+def test_automatic_queue_reaches_older_jobs(
+    app, profile, settings, job, analysis, monkeypatch
+):
+    settings.update(mode="manual", max_jobs_per_run=1, search_platforms=["company"])
+    first = install(app, profile, settings, job, analysis, monkeypatch)
+    second = app.state.engine.add_job(
+        {**job, "url": "https://example.com/jobs/python"}
+    )[0]["id"]
+    for expected in (second, first):
+        app.state.engine.run()
+        assert app.state.store.all("runs")[0]["items"][0]["job_id"] == expected
+
+
+def test_saved_answer_variants_require_consistent_explicit_answers():
+    from assistant.portal_forms import answer_for
+
+    profile = {
+        "answers": [{"question": "Pretensão salarial como CLT", "answer": "9000"}]
+    }
+    assert answer_for("Qual sua pretensão salarial CLT?*", profile) == "9000"
+    assert answer_for("Qual sua última remuneração?", profile) is None
+    profile["answers"].append({"question": "Pretensão salarial CLT", "answer": "8000"})
+    assert answer_for("Qual sua pretensão salarial CLT?", profile) is None
+
+
+def test_structured_country_from_html_escaped_gupy_posting():
+    from assistant.portal_discovery import posting_country
+    import html
+    import json
+
+    def script(country):
+        return html.escape(
+            json.dumps(
+                {
+                    "@type": "JobPosting",
+                    "jobLocation": {"address": {"addressCountry": country}},
+                }
+            )
+        )
+
+    assert posting_country([script("Brasil")]) == "BR"
+    assert posting_country([script("Brasil"), script("Portugal")]) == "unknown"
+
+
+def test_scoped_portal_authorization_respects_domain_refusal():
+    from assistant.portal_forms import share_authorized
+
+    profile = {
+        "authorized_portal": "gupy",
+        "answers": [
+            {"question": "Autorizar envio de dados para b.gupy.io", "answer": "Não"}
+        ],
+    }
+    assert share_authorized("https://a.gupy.io/jobs/123", profile)
+    assert not share_authorized("https://b.gupy.io/jobs/123", profile)
+    assert not share_authorized("https://www.linkedin.com/jobs/123", profile)
+
+
+def test_agile_project_titles_have_distinct_area():
+    from assistant.matching import infer_area
+
+    for title in [
+        "Agile Master I (Remote)",
+        "Scrum Master - Presencial",
+        "Especialista em Governança de Projetos (PMO)",
+    ]:
+        assert infer_area(title) == "Projetos e Agilidade"
+    assert not infer_area("Scrum Master e Desenvolvedor")
+
+
+def test_late_schedule_starts_once_even_after_busy_tick(app, settings, monkeypatch):
+    import datetime
+    from unittest.mock import Mock
+
+    class Clock(datetime.datetime):
+        @classmethod
+        def now(cls, zone):
+            return cls(2026, 11, 23, 11, 0, tzinfo=zone)
+
+    settings.update(schedule_enabled=True, weekdays=[0], time="09:00")
+    app.state.store.put("settings", settings)
+    engine = app.state.engine
+    monkeypatch.setattr("assistant.engine.datetime", Clock)
+    monkeypatch.setattr(
+        engine.stop, "wait", Mock(side_effect=[False, False, False, True])
+    )
+    start = Mock(side_effect=[ValueError("busy"), None])
+    monkeypatch.setattr(engine, "start_run", start)
+    engine.scheduler()
+    assert start.call_count == 2
+    assert app.state.store.get("schedule")["last"].startswith("2026-11-23 09:00")

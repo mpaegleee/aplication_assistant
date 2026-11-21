@@ -16,6 +16,21 @@ def normalize(value):
     ).strip(" :*?")
 
 
+# Equivalent prompts share an explicitly supplied answer. Contract and period matter.
+ANSWER_GROUPS = (
+    {
+        "pretensao salarial como clt",
+        "qual sua pretensao salarial clt",
+        "pretensao salarial clt",
+    },
+    {"qual sua ultima remuneracao", "ultima remuneracao"},
+    {
+        "possui certificacao psm i",
+        "possui certificacao certificacao psm i (professional scrum master i)",
+    },
+)
+
+
 def answer_for(label, profile):
     key = normalize(label)
     saved = [
@@ -25,7 +40,19 @@ def answer_for(label, profile):
     ]
     if saved:
         return saved[0] if len(set(saved)) == 1 else None
+    for group in ANSWER_GROUPS:
+        if key in group:
+            answers = {
+                a["answer"]
+                for a in profile.get("answers", [])
+                if normalize(a["question"]) in group
+            }
+            return answers.pop() if len(answers) == 1 else None
     return {
+        "cidade": profile.get("city"),
+        "cidade atual": profile.get("city"),
+        "perfil do linkedin": profile.get("linkedin_url"),
+        "celular": profile.get("phone"),
         "nome": profile.get("name"),
         "full name": profile.get("name"),
         "nome completo": profile.get("name"),
@@ -41,6 +68,19 @@ def answer_for(label, profile):
         "mobile phone number": profile.get("phone"),
         "linkedin": profile.get("linkedin_url"),
     }.get(key)
+
+
+def share_authorized(url, profile):
+    from urllib.parse import urlsplit
+    from .connectors import platform_for
+
+    question = "Autorizar envio de dados para " + (urlsplit(url).hostname or "")
+    if any(
+        normalize(a["question"]) == normalize(question)
+        for a in profile.get("answers", [])
+    ):
+        return normalize(answer_for(question, profile) or "") == "sim"
+    return platform_for(url) == profile.get("authorized_portal")
 
 
 async def fill_inhire(page, profile, pdf, submit=False, before_submit=None):
@@ -136,7 +176,7 @@ async def fill_inhire(page, profile, pdf, submit=False, before_submit=None):
     from urllib.parse import urlsplit
 
     consent_question = "Autorizar envio de dados para " + urlsplit(page.url).hostname
-    if normalize(answer_for(consent_question, profile) or "") != "sim":
+    if not share_authorized(page.url, profile):
         return {
             "status": "pending",
             "reason": "Leia a política do portal e salve no perfil a resposta Sim para: "

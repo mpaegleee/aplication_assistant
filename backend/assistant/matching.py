@@ -151,6 +151,7 @@ def validate_analysis(raw, p, j):
 
 
 TITLE_RULES = {
+    "Projetos e Agilidade": r"\b(scrum master|agile master|agile coach|pmo|governanca de projetos|gerente de projetos)\b",
     "Desenvolvimento": r"\b(desenvolvedor|desenvolvedora|developer|programador|programadora|software engineer|engenheir[oa] de software)\b",
     "Dados": r"\b(cientista de dados|analista de dados|engenheir[oa] de dados|data scientist|data engineer)\b",
     "Financeiro": r"\b(financeiro|financeira|contabil|contador|contadora|contabilidade)\b",

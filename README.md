@@ -10,7 +10,9 @@ Assistente gratuito e de código aberto para organizar a busca por emprego no Br
 
 O currículo destaca e ordena fatos confirmados do perfil; a IA não cria certificações ou experiências para aumentar a aderência.
 
-## Versão 0.4.0
+## Versão 0.5.0
+
+A rotina recupera o horário perdido no mesmo dia, alterna vagas já processadas e acompanha links de candidatura para Gupy e InHire. A área Projetos e Agilidade reconhece cargos como Scrum Master e PMO. É possível autorizar de uma vez o compartilhamento com empresas dos portais selecionados.
 
 - Fila **Vagas consolidadas**, filtros, descrição de publicações, currículo por posição e histórico.
 - Fontes RSS/JSON/JobPosting, Greenhouse e Lever; busca experimental no navegador em LinkedIn (vagas e publicações), Indeed e páginas Gupy configuradas pelo usuário.
@@ -27,13 +29,13 @@ Os artefatos preparados para a seção **Releases** são:
 
 | Sistema | Arquivo | Como usar |
 |---|---|---|
-| Windows 10/11 x64 | `ApplicationAssistant-Setup-0.4.0-Windows-x64.exe` | Executar o instalador e abrir pelo atalho |
-| Linux x64 | `ApplicationAssistant-0.4.0-Linux-x64.tar.gz` | Extrair e executar `./Iniciar.sh`; `./Instalar.sh` cria o atalho |
-| Desenvolvimento | `ApplicationAssistant-Codigo-0.4.0.zip` | Código, testes e scripts de build |
+| Windows 10/11 x64 | `ApplicationAssistant-Setup-0.5.0-Windows-x64.exe` | Executar o instalador e abrir pelo atalho |
+| Linux x64 | `ApplicationAssistant-0.5.0-Linux-x64.tar.gz` | Extrair e executar `./Iniciar.sh`; `./Instalar.sh` cria o atalho |
+| Desenvolvimento | `ApplicationAssistant-Codigo-0.5.0.zip` | Código, testes e scripts de build |
 
 Python, driver e Chromium acompanham os pacotes de uso. No Linux, bibliotecas de sistema do Chromium ainda podem ser necessárias. O computador deve permanecer ligado, sem suspensão, com o processo aberto. Para servidor próprio, há instalação Docker.
 
-- [Guia da versão: fila manual, rotina, busca em posts e limitações](docs/ATUALIZACAO-0.4.0.md)
+- [Guia da versão: fila manual, rotina, busca em posts e limitações](docs/AUTOMATICO-0.5.0.md)
 - [Configuração para usuários](docs/GUIA-DO-USUARIO.md)
 - [Instalar no Linux](docs/LINUX.md)
 - [Verificação e testes](docs/VERIFICACAO.md)

@@ -61,3 +61,7 @@ Seguir TESTE-LOCAL.md em Windows 10/11 x64. Validar abertura do pacote, PDF real
 - TypeScript/Vite passaram. A tentativa de inspeção visual com a ferramenta de navegador falhou na inicialização do ambiente; não foi substituída por uma alegação de teste visual.
 - Instalador Windows real produzido com NSIS a partir dos binários Windows; execução nativa Windows ainda pendente. Nenhuma candidatura real foi enviada. O acesso GitHub disponível é somente leitura, portanto os artefatos e código estão preparados localmente para publicação pelo mantenedor.
 - Smoke do pacote Linux 0.4.0: runtime, driver, frontend e scripts extraídos em diretório temporário; passaram HTTP real, criação de senha, configurações, coleta sem envio, reinício com persistência e diagnóstico Chromium com sandbox. Os arquivos do navegador foram reutilizados do cache local após comparar o binário Chrome empacotado por SHA-256; não houve acesso a portais reais.
+
+## Versão 0.5.0
+
+O teste integrado inicia a rotina automática com um anúncio do LinkedIn, abre a página da Gupy em outra sessão, segue o link da própria vaga, preenche o contato, anexa o PDF, registra uma confirmação e tenta acessar a mesma oportunidade pela URL direta. A aplicação bloqueia a segunda tentativa. O teste usa Chromium com páginas controladas. Os dois URLs públicos de empregadores fornecidos responderam à consulta HTTP. O HTML público da Gupy confirmou o link de inscrição e os dados estruturados de país. Login real e envio a empregadores seguem sem validação nesta versão.

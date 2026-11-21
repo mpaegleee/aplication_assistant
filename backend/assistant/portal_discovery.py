@@ -1,6 +1,7 @@
 """Read-only, bounded portal discovery. Portal layouts remain explicit experimental adapters."""
 
 import hashlib
+import html
 import json
 import re
 from urllib.parse import quote, urlsplit
@@ -10,6 +11,34 @@ from playwright.async_api import TimeoutError as BrowserTimeout
 from .ai import AI
 from .matching import exact_quote, normalized
 from .models import JobInput
+from .sources import application_identity
+
+
+def posting_country(scripts):
+    countries = set()
+    for script in scripts:
+        try:
+            data = json.loads(html.unescape(script))
+        except ValueError:
+            continue
+        for item in data if isinstance(data, list) else [data]:
+            if not isinstance(item, dict) or item.get("@type") != "JobPosting":
+                continue
+            locations = item.get("jobLocation", [])
+            for location in locations if isinstance(locations, list) else [locations]:
+                address = (
+                    location.get("address") if isinstance(location, dict) else None
+                )
+                country = (
+                    address.get("addressCountry") if isinstance(address, dict) else None
+                )
+                if isinstance(country, str) and country.strip():
+                    countries.add(
+                        "BR"
+                        if normalized(country) in ("br", "brasil", "brazil")
+                        else "unknown"
+                    )
+    return countries.pop() if len(countries) == 1 else "unknown" if countries else ""
 
 
 async def collect(page, platform, query, limit, posts=True, source_url=None):
@@ -54,19 +83,28 @@ async def collect(page, platform, query, limit, posts=True, source_url=None):
             if is_post
             else 'a[href*="/jobs/view/"], a[href*="viewjob?"], a[href*="/jobs/"], a[href*="/job/"], a[href*="/vagas/"]'
         )
-        try:
-            await page.locator(selector).first.wait_for(state="attached", timeout=10000)
-        except BrowserTimeout:
-            empty = page.get_by_text(
-                re.compile(
-                    r"nenhum resultado|nenhuma vaga|no results|no jobs", re.IGNORECASE
+        direct_job = bool(
+            platform == "gupy"
+            and source_url
+            and application_identity(source_url).startswith("gupy:")
+        )
+        if not direct_job:
+            try:
+                await page.locator(selector).first.wait_for(
+                    state="attached", timeout=10000
                 )
-            )
-            if not await empty.count():
-                raise ValueError(
-                    "Resultados não reconhecidos. Confira login, verificações e layout no navegador."
-                ) from None
-            continue
+            except BrowserTimeout:
+                empty = page.get_by_text(
+                    re.compile(
+                        r"nenhum resultado|nenhuma vaga|no results|no jobs",
+                        re.IGNORECASE,
+                    )
+                )
+                if not await empty.count():
+                    raise ValueError(
+                        "Resultados não reconhecidos. Confira login, verificações e layout no navegador."
+                    ) from None
+                continue
         if is_post:
             containers = page.locator('[data-urn*="activity:"], article')
             for i in range(min(await containers.count(), limit * 3)):
@@ -117,7 +155,7 @@ async def collect(page, platform, query, limit, posts=True, source_url=None):
         )
         urls = list(dict.fromkeys(urls))
         # The source may itself be a vacancy, with no result cards.
-        if source_url and not urls:
+        if direct_job or (source_url and not urls):
             urls = [source_url]
         search_cap = min(limit, max(1, limit // 2)) if len(searches) > 1 else limit
         for url in urls:
@@ -151,6 +189,11 @@ async def collect(page, platform, query, limit, posts=True, source_url=None):
             data = await page.evaluate(
                 """() => { const e=document.querySelector('.jobs-details__main-content, .jobsearch-JobComponent, main'); return e ? {text:e.innerText, links:Array.from(e.querySelectorAll('a[href]')).map(a=>({url:a.href,label:a.innerText}))} : {text:'',links:[]}; }"""
             )
+            structured = await page.locator(
+                'script[type="application/ld+json"]'
+            ).evaluate_all(
+                "scripts => scripts.slice(0,20).map(e => e.textContent.slice(0,250000))"
+            )
             if len(data["text"].strip()) >= 40:
                 records.append(
                     {
@@ -158,6 +201,7 @@ async def collect(page, platform, query, limit, posts=True, source_url=None):
                         "text": data["text"][:40000],
                         "links": data["links"][:80],
                         "kind": "job",
+                        "country": posting_country(structured),
                         "platform": platform,
                     }
                 )
@@ -229,7 +273,7 @@ def extract_record(store, settings, raw):
     )
     job = JobInput(
         **fields,
-        country=country,
+        country=raw.get("country") or country,
         url=raw["url"],
         application_url=application_url,
         description=raw["text"],

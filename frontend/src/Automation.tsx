@@ -281,6 +281,14 @@ export function AutomationPanel({ state, act, busy, go }: Props) {
             Autorizar um destino não inicia buscas nele. Um destino sem conector
             validado permanece como pendência.
           </p>
+          <label className="toggle-row">
+            <span>
+              <strong>Autorizar o compartilhamento com empresas nos portais de destino habilitados</strong>
+              <small>Permite preencher dados pessoais e anexar o currículo para essas empresas. Uma recusa salva para um domínio continua valendo.</small>
+            </span>
+            <input type="checkbox" checked={s.share_with_enabled_portals}
+              onChange={(e) => change("share_with_enabled_portals", e.target.checked)} />
+          </label>
           {state.connectors
             .filter((c) => c.id !== "feed")
             .map((c) => (

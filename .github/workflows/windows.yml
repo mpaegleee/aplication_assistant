@@ -46,8 +46,8 @@ jobs:
         run: '& "C:/Program Files (x86)/Inno Setup 6/ISCC.exe" packaging/installer.iss'
       - uses: actions/upload-artifact@v4
         with:
-          name: ApplicationAssistant-Windows-0.4.0
+          name: ApplicationAssistant-Windows-0.5.0
           path: |
             dist/ApplicationAssistant/
-            dist/ApplicationAssistant-Setup-0.4.0-Windows-x64.exe
+            dist/ApplicationAssistant-Setup-0.5.0-Windows-x64.exe
           retention-days: 14

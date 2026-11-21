@@ -470,6 +470,9 @@ class BrowserManager:
                     "status": "pending",
                     "reason": "Destino externo identificado. Abra o portal correspondente.",
                 }
+            handoff = self.handoffs.get(platform)
+            if result["status"] == "pending" and handoff and handoff.get("job_id") == job_id:
+                result = {"status": "handoff", "url": handoff["url"]}
             await self.save(platform)
             return result
         finally:

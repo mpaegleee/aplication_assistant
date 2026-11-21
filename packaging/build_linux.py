@@ -15,7 +15,7 @@ def main():
     parser.add_argument("--browsers", required=True, type=Path)
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
-    output = root / "dist/ApplicationAssistant-0.4.0-Linux-x64.tar.gz"
+    output = root / "dist/ApplicationAssistant-0.5.0-Linux-x64.tar.gz"
     output.parent.mkdir(exist_ok=True)
     prefix = "ApplicationAssistant-Linux"
 
@@ -79,7 +79,7 @@ printf 'Instalado em %s. Abra Application Assistant no menu ou execute Iniciar.s
         scripts["build-manifest.json"] = (
             json.dumps(
                 {
-                    "version": "0.4.0",
+                    "version": "0.5.0",
                     "target": "linux-x64",
                     "runtime": args.runtime.name,
                     "browser": "chromium-1255",

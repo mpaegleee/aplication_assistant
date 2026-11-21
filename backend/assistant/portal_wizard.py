@@ -4,9 +4,14 @@ import hashlib
 import json
 import re
 
+from urllib.parse import urlsplit
+
 from playwright.async_api import Error as BrowserError
 
-from .portal_forms import answer_for, normalize
+from .sources import application_identity
+from .connectors import platform_for
+
+from .portal_forms import answer_for, normalize, share_authorized
 
 NEXT = re.compile(
     r"^(avançar|continuar|próximo|próxima|next|review|avaliar|revisar)(?: etapa)?$",
@@ -17,9 +22,52 @@ FINAL = re.compile(
     re.IGNORECASE,
 )
 SUCCESS = re.compile(
-    r"(candidatura (enviada|realizada|recebida) com sucesso|recebemos (a )?sua candidatura|você se candidatou|application (was )?(submitted|sent)|your application has been)",
+    r"(candidatura (enviada|realizada|recebida) com sucesso|recebemos (a )?sua candidatura|você se candidatou|application (?:was |has been )?(submitted|sent))",
     re.IGNORECASE,
 )
+
+
+ENTRY = re.compile(
+    r"^(?:candidatar-se(?: para a vaga)?|candidate-se|apply(?: now)?)(?:\s*[↗])?$", re.I
+)
+
+
+def external_vacancy(url):
+    from .browser import allowed_url
+
+    platform = platform_for(url)
+    return (
+        platform in ("inhire", "gupy")
+        and allowed_url(url, platform)
+        and application_identity(url).startswith(platform + ":")
+    )
+
+
+async def entry_link(page, platform):
+    links = page.get_by_role("link", name=ENTRY)
+    hrefs = await links.evaluate_all(
+        "links => [...new Set(links.map(link => link.href))]"
+    )
+    if platform == "gupy":
+        # Job boards repeat the same apply link and may also link to a sticky button.
+        hrefs = [href for href in hrefs if href.split("#")[0] != page.url.split("#")[0]]
+    if len(hrefs) != 1:
+        return None
+    target = hrefs[0]
+    if platform in ("linkedin", "indeed") and external_vacancy(target):
+        return {"status": "handoff", "url": target}
+    # A labelled GET link opens the next page without submitting form data.
+    if (
+        platform == "gupy"
+        and target != page.url
+        and urlsplit(target).scheme == "https"
+        and urlsplit(target).netloc == urlsplit(page.url).netloc
+        and re.fullmatch(r"/candidates/jobs/[0-9]+/apply/?", urlsplit(target).path)
+        and application_identity(page.url)
+        == "gupy:" + urlsplit(target).path.split("/")[3]
+    ):
+        await page.goto(target, wait_until="domcontentloaded", timeout=30000)
+    return None
 
 
 async def fill_wizard(page, platform, profile, pdf, submit=False, before_submit=None):
@@ -35,6 +83,9 @@ async def fill_wizard(page, platform, profile, pdf, submit=False, before_submit=
             "status": "pending",
             "reason": "Login ou verificação necessária. Use o navegador interno e libere o controle.",
         }
+    transfer = await entry_link(page, platform)
+    if transfer:
+        return transfer
     if platform == "linkedin":
         entry = page.get_by_role(
             "button",
@@ -53,15 +104,8 @@ async def fill_wizard(page, platform, profile, pdf, submit=False, before_submit=
                 "status": "pending",
                 "reason": "Sessão expirada ou verificação. Abra o portal, entre e libere o controle.",
             }
-        from urllib.parse import urlsplit
-
         domain = urlsplit(page.url).hostname
-        if (
-            normalize(
-                answer_for("Autorizar envio de dados para " + domain, profile) or ""
-            )
-            != "sim"
-        ):
+        if not share_authorized(page.url, profile):
             return {
                 "status": "pending",
                 "reason": "Leia a política do portal e salve Sim para: Autorizar envio de dados para "
@@ -99,10 +143,21 @@ async def fill_wizard(page, platform, profile, pdf, submit=False, before_submit=
         missing = []
         operations = []
         resume_radios = False
+        uploads = [f for f in fields if f["type"] == "file" and not f["disabled"]]
         for f in fields:
             if f["disabled"] or f["type"] in ("hidden", "submit", "button", "reset"):
                 continue
             if f["type"] == "file":
+                if len(uploads) > 1 or (
+                    f["label"]
+                    and re.search(
+                        r"certificad|carta|portfolio|cover letter|identidade",
+                        normalize(f["label"]),
+                    )
+                ):
+                    if f["required"] or len(uploads) > 1:
+                        missing.append(f["label"] or "Documento adicional")
+                    continue
                 if f["accept"] and not any(
                     x in f["accept"].lower() for x in ("pdf", "application/*", "*/*")
                 ):
@@ -135,6 +190,10 @@ async def fill_wizard(page, platform, profile, pdf, submit=False, before_submit=
                     missing.append(question or "Confirmação obrigatória")
             elif answer:
                 operations.append((f, answer))
+            elif not f["required"] and re.search(
+                r"\b(opcional|optional)\b", normalize(question)
+            ):
+                continue
             elif f["required"] or not f["value"]:
                 missing.append(question or "Campo sem identificação")
         if missing:
