@@ -14,6 +14,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--compiler", required=True)
     parser.add_argument("--version", default="3.14.10")
+    parser.add_argument(
+        "--browsers",
+        required=True,
+        help="Diretório Chromium Windows instalado pela mesma versão Playwright",
+    )
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     if not (root / "frontend/dist/index.html").exists():
@@ -147,6 +152,14 @@ def main():
         )
         for source in (target / "app").rglob("*.py"):
             source.unlink()
+        browser_source = Path(args.browsers)
+        if not list(browser_source.glob("chromium-*/chrome-win64/chrome.exe")):
+            raise SystemExit(
+                "Chromium Windows ausente. Use PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=win64 e playwright install --no-shell chromium."
+            )
+        shutil.copytree(
+            browser_source, target / "browsers", ignore=shutil.ignore_patterns(".links")
+        )
         shutil.copytree(root / "frontend/dist", target / "frontend/dist")
         shutil.copytree(root / "docs", target / "Ajuda")
         shutil.copy(root / "LICENSE.txt", target / "LICENSE.txt")
@@ -167,11 +180,11 @@ def main():
             encoding="ascii",
         )
         (target / "LEIA-ME.txt").write_text(
-            "APPLICATION ASSISTANT - TESTE LOCAL WINDOWS 10/11 x64\n\n1. Extraia a pasta inteira do ZIP para uma pasta pessoal.\n2. Clique duas vezes em Iniciar.cmd.\n3. Mantenha a janela aberta. O navegador abre em http://127.0.0.1:8765\n4. Crie uma senha e siga Ajuda/TESTE-LOCAL.md.\n\nNao precisa instalar Python, Node.js ou Docker.\nEste pacote foi montado em Linux e ainda precisa de validacao em Windows.\nLinkedIn/Gupy: fluxo assistido. Envio automatico somente SMTP configurado.\nNao ha chaves de IA, contas ou dados pessoais incluidos.\nNao publique este pacote antes da revisao do mantenedor.\n",
+            "APPLICATION ASSISTANT - TESTE LOCAL WINDOWS 10/11 x64\n\n1. Extraia a pasta inteira do ZIP para uma pasta pessoal.\n2. Clique duas vezes em Iniciar.cmd.\n3. Mantenha a janela aberta. O navegador abre em http://127.0.0.1:8765\n4. Crie uma senha e siga Ajuda/TESTE-LOCAL.md.\n\nNao precisa instalar Python, Node.js ou Docker.\nEste pacote foi montado em Linux e ainda precisa de validacao em Windows.\nNavegador interno: login manual e sessoes locais. InHire experimental e SMTP para envio automatico. Consulte Ajuda/ATUALIZACAO-0.3.0.md.\nNao ha chaves de IA, contas ou dados pessoais incluidos.\nNao publique este pacote antes da revisao do mantenedor.\n",
             encoding="utf-8",
         )
         manifest = {
-            "version": "0.2.0",
+            "version": "0.3.0",
             "target": "windows-x64",
             "runtime_url": url,
             "runtime_sha256": hashlib.sha256(blob).hexdigest(),
@@ -183,7 +196,7 @@ def main():
             json.dumps(manifest, indent=2), encoding="utf-8"
         )
     zip_path = shutil.make_archive(
-        str(output / "ApplicationAssistant-Windows-Local-0.2.0"),
+        str(output / "ApplicationAssistant-Windows-Local-0.3.0"),
         "zip",
         target.parent,
         target.name,

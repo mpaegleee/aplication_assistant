@@ -3,8 +3,24 @@
 from urllib.parse import urlsplit
 
 PLATFORMS = ["feed", "company", "greenhouse", "lever", "linkedin", "gupy", "indeed"]
-DESTINATIONS = ["email", "company", "greenhouse", "lever", "linkedin", "gupy", "indeed"]
+DESTINATIONS = [
+    "inhire",
+    "email",
+    "company",
+    "greenhouse",
+    "lever",
+    "linkedin",
+    "gupy",
+    "indeed",
+]
 CONNECTORS = [
+    {
+        "id": "inhire",
+        "name": "InHire",
+        "discovery": False,
+        "submission": True,
+        "reason": "Formulário direto experimental: respostas exatas, autorização de dados por empresa e comprovante do portal. Validado em ambiente de teste.",
+    },
     {
         "id": "feed",
         "name": "Feeds RSS/JSON",
@@ -67,6 +83,7 @@ CONNECTORS = [
 def platform_for(url, fallback="company"):
     host = (urlsplit(url).hostname or "").lower()
     for domain, platform in [
+        ("inhire.app", "inhire"),
         ("linkedin.com", "linkedin"),
         ("gupy.io", "gupy"),
         ("indeed.com", "indeed"),

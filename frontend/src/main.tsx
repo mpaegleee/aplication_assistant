@@ -31,6 +31,7 @@ import {
   Inbox,
 } from "lucide-react";
 import { api } from "./api";
+import { BrowserPage } from "./BrowserPage";
 import { AISettings } from "./AISettings";
 import { AutomationPanel, RunSummary } from "./Automation";
 import { editableJob, editableSettings } from "./types";
@@ -374,6 +375,7 @@ function App() {
     ["applications", "Candidaturas", BriefcaseBusiness],
     ["followups", "Retornos", Inbox],
     ["schedule", "Agenda e execuções", CalendarClock],
+    ["browser", "Navegador e sessões", Link2],
     ["settings", "Configurações", Settings2],
     ["help", "Como usar", BookOpen],
   ] as const;
@@ -385,6 +387,7 @@ function App() {
     applications: "Minhas candidaturas",
     followups: "Retornos",
     schedule: "Agenda e execuções",
+    browser: "Navegador e sessões",
     settings: "Configurações",
     help: "Como usar",
   };
@@ -579,12 +582,15 @@ function App() {
           {page === "followups" && (
             <Followups state={state} act={act} busy={busy} />
           )}
+          {page === "browser" && (
+            <BrowserPage state={state} refresh={refresh} />
+          )}
           {page === "help" && <Help />}
         </main>
         <footer>
           Application Assistant{" "}
           <span>Feito para tornar a busca por emprego mais humana.</span>
-          <span>v0.2.0 · teste local</span>
+          <span>v0.3.0 · teste local</span>
         </footer>
       </div>
       {toast && (
@@ -662,7 +668,7 @@ function Dashboard({
           {
             label: "Candidaturas registradas",
             n: sent.length,
-            sub: "Envios SMTP e informados por você",
+            sub: "Envios SMTP, portais e informados por você",
             Icon: BriefcaseBusiness,
           },
           {
@@ -726,7 +732,7 @@ function Dashboard({
           <div className="panel-heading">
             <div>
               <h2>Atividade de candidaturas</h2>
-              <p>Envios aceitos pelo SMTP nos últimos 7 dias</p>
+              <p>Candidaturas registradas nos últimos 7 dias</p>
             </div>
             <span className="subtle-pill">Últimos 7 dias</span>
           </div>
@@ -978,6 +984,13 @@ function ProfilePage({ state, act, busy }: Common) {
                   type="email"
                   value={p.email}
                   onChange={(e) => patch("email", e.target.value)}
+                />
+              </Field>
+              <Field label="Endereço público do perfil LinkedIn">
+                <input
+                  value={p.linkedin_url || ""}
+                  onChange={(e) => patch("linkedin_url", e.target.value)}
+                  placeholder="https://www.linkedin.com/in/seu-perfil"
                 />
               </Field>
               <Field label="Telefone">
@@ -2584,7 +2597,7 @@ function SchedulePage({ state, act, busy }: Common) {
               </summary>
               <p>
                 {r.imported} vagas importadas · {r.analyzed} analisadas ·{" "}
-                {r.sent} aceitas pelo SMTP
+                {r.sent} concluídas por conector
               </p>
               {r.errors.map((error, i) => (
                 <p className="notice" key={i}>
@@ -2797,9 +2810,11 @@ function Help() {
         </p>
         <h3>LinkedIn e Gupy</h3>
         <p>
-          O fluxo é assistido: prepare os documentos aqui e finalize no site.
-          Esta versão não acessa essas contas, não preenche formulários
-          automaticamente e não resolve CAPTCHA ou testes seletivos.
+          O fluxo é assistido: prepare os documentos aqui e finalize no site. O
+          navegador interno permite login manual e sessões criptografadas. O
+          preenchimento automático desses dois portais ainda está pendente.
+          InHire possui um formulário direto experimental. Verificações e testes
+          seletivos exigem sua intervenção.
         </p>
         <h3>Privacidade e backup</h3>
         <p>

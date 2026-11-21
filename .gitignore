@@ -15,3 +15,7 @@ dist/
 
 *.tsbuildinfo
 *.zip
+
+browsers/
+playwright-report/
+test-results/

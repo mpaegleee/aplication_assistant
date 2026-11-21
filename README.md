@@ -2,7 +2,9 @@
 
 Assistente pessoal para candidaturas no Brasil, com importação de currículo PDF, análise de aderência, revisão, documentos e acompanhamento. Uma pessoa por instalação. Prioridade: Windows 10/11 x64; Docker em Linux para servidor próprio.
 
-**Versão 0.2.0 para teste local. Nenhum código ou binário foi publicado.** Não anunciar automação universal: LinkedIn e Gupy estão no fluxo assistido. Envio automático implementado apenas por SMTP quando o anúncio pede explicitamente candidatura por e-mail.
+**Versão 0.3.0 para teste local. Nenhum código ou binário foi publicado.** Navegador Chromium interno com login manual, sessões criptografadas e controle via WebSocket. InHire tem formulário direto experimental validado em testes controlados; SMTP mantém envio automático. Busca autenticada e envio automático em LinkedIn, Gupy e Indeed ainda estão pendentes.
+
+- [Navegador, sessões e atualização 0.3.0](docs/ATUALIZACAO-0.3.0.md)
 
 - [Rotina automática e limites da versão 0.2.0](docs/ATUALIZACAO-0.2.0.md)
 - [Guia do usuário](docs/GUIA-DO-USUARIO.md)

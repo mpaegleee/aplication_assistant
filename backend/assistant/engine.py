@@ -42,6 +42,7 @@ class Engine:
         self.thread = None
         self.mail_lock = threading.Lock()
         self.mail_thread = None
+        self.browser = None
 
     def recover(self):
         # Called only after acquiring the cross-process installation lock.
@@ -93,7 +94,9 @@ class Engine:
                     origin
                     or {
                         "url": data["url"],
-                        "platform": platform_for(data["url"], "company"),
+                        "platform": "company"
+                        if platform_for(data["url"]) == "inhire"
+                        else platform_for(data["url"], "company"),
                         "source": data.get("source", "manual"),
                     }
                 ],
@@ -294,6 +297,124 @@ class Engine:
             )
             return j
 
+    def browser_apply(self, id, submit=False):
+        with self.lock:
+            job = self.store.get("jobs", id)
+            if not job:
+                raise ValueError("Vaga não encontrada.")
+            if job["status"] in TERMINAL or job["status"] == "sending":
+                raise ValueError(
+                    "Candidatura já tentada ou concluída. Confira o histórico."
+                )
+            profile, settings, analysis = self.valid_analysis(job)
+            if settings["paused"]:
+                raise ValueError(
+                    "Retome a rotina antes de compartilhar dados com o portal."
+                )
+            if settings["mode"] == "review" and not job.get("approved"):
+                raise ValueError("Aprove esta candidatura antes de preencher o portal.")
+            url = job.get("application_url") or job["url"]
+            if (
+                platform_for(url) != "inhire"
+                or "inhire" not in settings["allowed_destinations"]
+            ):
+                raise ValueError(
+                    "Habilite InHire nos destinos. Este fluxo atende formulários diretos InHire."
+                )
+            from .browser import allowed_url
+
+            if not allowed_url(url, "inhire") or not self.browser:
+                raise ValueError("Endereço ou navegador indisponível.")
+            identity = application_identity(url)
+            for other in self.store.all("jobs"):
+                if (
+                    other["id"] != id
+                    and other["status"] in TERMINAL | {"sending"}
+                    and application_identity(
+                        other.get("application_url") or other.get("url", "")
+                    )
+                    == identity
+                ):
+                    raise ValueError(
+                        "Já existe tentativa para esta vaga em outro registro."
+                    )
+            pdf = resume_pdf(profile, analysis)
+            attempted = False
+
+            def intent():
+                nonlocal attempted
+                # Recheck persisted configuration immediately before the final click.
+                current = self.store.get("jobs", id)
+                self.valid_analysis(current)
+                config = self.settings()
+                if (
+                    config["paused"]
+                    or "inhire" not in config["allowed_destinations"]
+                    or (config["mode"] == "review" and not current.get("approved"))
+                ):
+                    raise ValueError(
+                        "Configuração ou aprovação alterada. Envio cancelado."
+                    )
+                day = datetime.now(ZoneInfo(config["timezone"])).date().isoformat()
+                if not self.store.reserve("sends", day, config["daily_limit"]):
+                    raise ValueError("Limite diário de tentativas atingido.")
+                job.update(
+                    status="sending",
+                    destination="inhire",
+                    attempted_at=now(),
+                    browser_attempt=secrets.token_hex(16),
+                    resume_snapshot=pdf.hex(),
+                    submitted_profile=profile,
+                )
+                self.store.put("jobs", job, id)
+                attempted = True
+                self.store.event(id, "Tentativa de envio ao portal iniciada.")
+
+            try:
+                result = self.browser.call(
+                    self.browser.inhire(url, profile, pdf, submit, intent), timeout=110
+                )
+            except Exception:
+                if attempted:
+                    job.update(
+                        status="uncertain",
+                        pending_reason="Tentativa interrompida. Confira o portal; repetição automática bloqueada.",
+                    )
+                    self.store.put("jobs", job, id)
+                raise
+            if result["status"] == "confirmed":
+                self.store.put(
+                    "browser_proofs",
+                    {
+                        "image": result.pop("proof"),
+                        "at": now(),
+                        "attempt": job["browser_attempt"],
+                    },
+                    id,
+                )
+                job.update(
+                    pending_reason="",
+                    pending_code="",
+                    destination="inhire",
+                    browser_confirmed=True,
+                )
+                record_stage(job, "receipt", "browser")
+                job["sent_at"] = now()
+            elif attempted:
+                job.update(
+                    status="uncertain",
+                    pending_code="browser_uncertain",
+                    pending_reason=result["reason"],
+                )
+            else:
+                job.update(
+                    pending_code="browser_" + result["status"],
+                    pending_reason=result["reason"],
+                )
+            self.store.put("jobs", job, id)
+            self.store.event(id, result["reason"])
+            return {"status": result["status"], "reason": result["reason"]}
+
     def start_run(self):
         if self.running:
             raise ValueError("Já existe uma execução em andamento.")
@@ -337,6 +458,17 @@ class Engine:
         if destination not in settings["allowed_destinations"]:
             return self.pending(
                 job, "destination_disabled", "Destino não autorizado: " + destination
+            )
+        if destination == "inhire":
+            if settings["mode"] == "review" and not job.get("approved"):
+                return self.pending(
+                    job, "approval_required", "Esta candidatura aguarda aprovação."
+                )
+            result = self.browser_apply(job["id"], submit=True)
+            return (
+                "sent"
+                if result["status"] == "confirmed"
+                else "browser_" + result["status"]
             )
         if destination != "email":
             return self.pending(

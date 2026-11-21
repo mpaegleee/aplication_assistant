@@ -1,6 +1,6 @@
 # Guia do usuário — Application Assistant
 
-Para as opções de rotina automática, assuntos de e-mail, leitura IMAP e histórico, consulte também **ATUALIZACAO-0.2.0.md**. O cadastro em portais ainda depende de conector validado.
+Para as opções de rotina automática, assuntos de e-mail, leitura IMAP e histórico, consulte também **ATUALIZACAO-0.2.0.md**. Veja **ATUALIZACAO-0.3.0.md** para o navegador interno e InHire experimental.
 
 ## Para que serve
 Organizar sua busca de emprego no Brasil, comparar vagas com seu perfil, preparar currículos e acompanhar candidaturas. Uma pessoa por instalação. O programa é gratuito; serviços de IA escolhidos por você podem cobrar pelo uso.
@@ -49,14 +49,14 @@ Autorize domínios exatos em Configurações → Fontes. Adicione feeds RSS ou J
 
 Por padrão, itens importados exigem revisão da área. Em Rotina automática, a classificação por regras de cargo pode ser habilitada; casos ambíguos continuam pendentes. RSS pode não trazer empresa, modalidade ou descrição completa; complete esses dados. Use a importação manual quando o site não expuser formato suportado.
 
-**LinkedIn e Gupy não são varridos automaticamente nesta versão.** Prepare a candidatura, abra o link, finalize no portal e registre o envio. Não há login nem senha dessas plataformas dentro do aplicativo. O LinkedIn restringe automação; APIs de candidatura da Gupy usam acessos de empresas, não uma conta comum de candidato.
+**LinkedIn e Gupy não são varridos automaticamente nesta versão.** Prepare a candidatura, abra o link, finalize no portal e registre o envio. O navegador interno permite login manual e mantém a sessão local criptografada; os formulários desses portais ainda exigem interação manual. O LinkedIn restringe automação; APIs de candidatura da Gupy usam acessos de empresas, não uma conta comum de candidato.
 
 ## Candidaturas por e-mail
 Configure o servidor SMTP com TLS direto (normalmente porta 465) ou STARTTLS (normalmente 587), remetente, usuário e senha de aplicativo. Use as instruções do seu provedor. Alguns provedores exigem OAuth, ainda não disponível. Nunca desative TLS para fazer funcionar.
 
 O anúncio precisa pedir explicitamente o envio de currículo/candidatura e conter o endereço que você cadastrou como destinatário. Um endereço de contato solto não libera envio. O e-mail gerado é simples, cita cargo e empresa e anexa o PDF factual. Modelos personalizados de assunto/corpo ainda não estão disponíveis. Assuntos literais entre aspas ou em linha Assunto: podem ser preservados automaticamente. Instruções ambíguas, carta de apresentação, pretensão salarial ou portfólio seguem para finalização assistida. Instruções de não enviar e anúncios encerrados também bloqueiam SMTP.
 
-Em modo de aprovação, aprove a candidatura e retome a rotina antes de enviar. Em automático, candidaturas elegíveis por e-mail são processadas sem aprovação individual. Os critérios, limites e configuração de envio continuam obrigatórios. Para ATS, a finalização continua assistida em ambos os modos.
+Em modo de aprovação, aprove a candidatura e retome a rotina antes de enviar. Em automático, candidaturas elegíveis por e-mail são processadas sem aprovação individual. Os critérios, limites e configuração de envio continuam obrigatórios. Para os demais ATS, a finalização continua assistida; InHire possui o fluxo experimental descrito no guia 0.3.0.
 
 "Aceita pelo SMTP" comprova apenas que o servidor aceitou a mensagem; não comprova entrega, leitura ou candidatura no ATS. Resultado incerto bloqueia reenvio automático. Confira manualmente o ocorrido e atualize o histórico.
 

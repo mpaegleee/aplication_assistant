@@ -9,3 +9,5 @@ python-multipart==0.0.34
 filelock==4.2.12
 tzdata==2026.6
 defusedxml==0.7.1
+playwright==1.65.2
+websockets==16.0

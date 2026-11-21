@@ -9,6 +9,7 @@ export type Profile = {
   email: string;
   phone: string;
   city: string;
+  linkedin_url: string;
   areas: string[];
   excluded_areas: string[];
   roles: string[];
@@ -63,6 +64,7 @@ export type Job = JobInput & {
   email_eligible: boolean;
   destination?: string;
   pending_reason?: string;
+  browser_confirmed?: boolean;
   pending_code?: string;
   origins?: { url: string; platform: string; source: string }[];
 };
@@ -172,6 +174,7 @@ export type AppState = {
     days: number;
     applied: number;
     smtp_accepted: number;
+    browser_confirmed: number;
     reported_manual: number;
     responses: number;
     current: Record<string, number>;

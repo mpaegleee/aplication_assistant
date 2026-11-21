@@ -1,7 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-if not exist ".venv\aa-ready.txt" (
+if not exist ".venv\aa-ready-0.3.0.txt" (
   where py >nul 2>nul
   if errorlevel 1 (
     echo Instale Python 3.12 x64 pelo site https://www.python.org/downloads/windows/
@@ -13,7 +13,7 @@ if not exist ".venv\aa-ready.txt" (
   if errorlevel 1 goto erro
   .venv\Scripts\python.exe -m pip install --require-hashes -r backend\requirements.lock
   if errorlevel 1 goto erro
-  echo ready> .venv\aa-ready.txt
+  echo ready> .venv\aa-ready-0.3.0.txt
 )
 if not exist "frontend\dist\index.html" (
   where npm >nul 2>nul
@@ -27,6 +27,9 @@ if not exist "frontend\dist\index.html" (
   call npm --prefix frontend run build
   if errorlevel 1 goto erro
 )
+set PLAYWRIGHT_BROWSERS_PATH=%CD%\browsers
+.venv\Scripts\python.exe -m playwright install --no-shell chromium
+if errorlevel 1 goto erro
 .venv\Scripts\python.exe backend\launcher.py
 if errorlevel 1 goto erro
 exit /b 0

@@ -1580,3 +1580,41 @@ footer {
     transition: none !important;
   }
 }
+
+.browser-panel {
+  padding: 24px;
+}
+.browser-panel label {
+  display: block;
+  margin: 12px 0;
+}
+.browser-panel input,
+.browser-panel select {
+  width: 100%;
+}
+.browser-viewport {
+  margin: 16px 0;
+  background: #e6ebee;
+  border: 2px solid #d6dfe3;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.browser-viewport:focus {
+  outline: 3px solid #258578;
+}
+.browser-viewport img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1280 / 800;
+}
+.browser-job {
+  border-top: 1px solid #d6dfe3;
+  padding: 18px 0;
+}
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin: 12px 0;
+}

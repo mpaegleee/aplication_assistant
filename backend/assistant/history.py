@@ -55,6 +55,7 @@ def metrics(store, settings, days=15):
         "days": days,
         "since": start.isoformat(),
         "applied": len(cohort),
+        "browser_confirmed": sum(bool(j.get("browser_confirmed")) for j in cohort),
         "smtp_accepted": sum(bool(j.get("message_id")) for j in cohort),
         "reported_manual": sum(
             any(x["status"] == "submitted_manual" for x in j.get("stage_history", []))
@@ -83,6 +84,7 @@ def metrics(store, settings, days=15):
                 for j in cohort
             )
             for destination in [
+                "inhire",
                 "email",
                 "linkedin",
                 "gupy",

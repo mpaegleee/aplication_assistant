@@ -1,6 +1,8 @@
 services:
   assistant:
     build: .
+    init: true
+    shm_size: "1gb"
     ports:
       - "127.0.0.1:8765:8765"
     volumes:

@@ -6,10 +6,10 @@ COPY frontend/ ./
 RUN npm run build
 
 FROM python:3.12-slim
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 AA_SERVER=1 AA_DATA_DIR=/data AA_STATIC_DIR=/app/frontend/dist
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 AA_SERVER=1 AA_DATA_DIR=/data AA_STATIC_DIR=/app/frontend/dist PLAYWRIGHT_BROWSERS_PATH=/opt/aa-browsers
 WORKDIR /app
 COPY backend/requirements.lock ./requirements.lock
-RUN pip install --no-cache-dir --require-hashes -r requirements.lock && useradd -u 10001 -m assistant && mkdir /data && chown assistant:assistant /data
+RUN pip install --no-cache-dir --require-hashes -r requirements.lock && python -m playwright install --with-deps --no-shell chromium && rm -rf /var/lib/apt/lists/* && useradd -u 10001 -m assistant && mkdir /data && chown assistant:assistant /data
 COPY --chown=assistant:assistant backend/ ./backend/
 COPY --chown=assistant:assistant --from=frontend /build/dist/ ./frontend/dist/
 USER assistant

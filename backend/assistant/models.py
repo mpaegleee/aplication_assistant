@@ -45,6 +45,7 @@ class Profile(Model):
     email: str = Field(default="", max_length=254)
     phone: str = Field(default="", max_length=50)
     city: str = Field(default="", max_length=150)
+    linkedin_url: str = Field(default="", max_length=500)
     areas: list[str] = Field(default_factory=list, max_length=20)
     excluded_areas: list[str] = Field(default_factory=list, max_length=20)
     roles: list[str] = Field(default_factory=list, max_length=30)
@@ -61,6 +62,15 @@ class Profile(Model):
     def areas_valid(cls, value):
         if any(x not in AREAS for x in value):
             raise ValueError("Área inválida")
+        return value
+
+    @field_validator("linkedin_url")
+    @classmethod
+    def linkedin_valid(cls, value):
+        if value and not re.fullmatch(
+            r"https://(www\.)?linkedin\.com/in/[\w%.-]+/?", value
+        ):
+            raise ValueError("Informe o endereço público do perfil LinkedIn.")
         return value
 
     @field_validator("email")
@@ -94,7 +104,7 @@ class Settings(Model):
         default_factory=lambda: ["feed", "company", "greenhouse", "lever"], max_length=7
     )
     allowed_destinations: list[str] = Field(
-        default_factory=lambda: ["email"], max_length=7
+        default_factory=lambda: ["email"], max_length=8
     )
     auto_classify_areas: bool = False
     run_time_limit_minutes: int = Field(default=60, ge=1, le=240)

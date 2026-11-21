@@ -1,6 +1,6 @@
 """Leitura limitada de fontes públicas; conexão ao IP já validado evita DNS rebinding."""
 
-import socket, ipaddress, ssl, http.client, json, re
+import socket, ipaddress, ssl, http.client, json, re, base64
 from urllib.parse import urlsplit, urljoin, urlunsplit, parse_qsl, urlencode
 from html.parser import HTMLParser
 from defusedxml import ElementTree
@@ -308,10 +308,26 @@ def application_identity(url):
     value = canonical_url(url)
     parsed = urlsplit(value)
     host = (parsed.hostname or "").lower()
+    if host.endswith(".inhire.app"):
+        match = re.search(r"/vagas/([a-fA-F0-9-]{36})(?:/|$)", parsed.path)
+        if match:
+            return "inhire:" + host + ":" + match.group(1).lower()
     if host == "gupy.io" or host.endswith(".gupy.io"):
         match = re.search(r"/jobs/(\d+)(?:/|$)", parsed.path)
         if match:
             return "gupy:" + match.group(1)
+        encoded = re.search(r"/job/([A-Za-z0-9_+=-]{1,300})(?:/|$)", parsed.path)
+        if encoded:
+            try:
+                token = encoded.group(1)
+                payload = json.loads(
+                    base64.urlsafe_b64decode(token + "=" * (-len(token) % 4))
+                )
+                job_id = str(payload.get("jobId", ""))
+                if re.fullmatch(r"[1-9][0-9]{0,15}", job_id):
+                    return "gupy:" + job_id
+            except (ValueError, TypeError, AttributeError):
+                pass
     if host == "jobs.lever.co" or host.endswith(".jobs.lever.co"):
         parts = parsed.path.strip("/").split("/")
         if len(parts) >= 2:

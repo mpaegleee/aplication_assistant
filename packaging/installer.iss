@@ -1,5 +1,5 @@
 #define AppName "Application Assistant"
-#define AppVersion "0.2.0"
+#define AppVersion "0.3.0"
 [Setup]
 AppId={{E694006C-89B5-4A84-B7DD-4D3AE88FB02E}
 AppName={#AppName}
@@ -8,7 +8,7 @@ DefaultDirName={localappdata}\Programs\Application Assistant
 DefaultGroupName={#AppName}
 PrivilegesRequired=lowest
 OutputDir=..\dist
-OutputBaseFilename=ApplicationAssistant-Setup-0.2.0
+OutputBaseFilename=ApplicationAssistant-Setup-0.3.0
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern

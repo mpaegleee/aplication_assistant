@@ -1,4 +1,4 @@
-"""Empacota só a aplicação e interface para atualizar uma instalação portátil existente."""
+"""Atualização completa: runtime e Chromium também mudam na versão 0.3."""
 
 import hashlib
 import json
@@ -10,7 +10,7 @@ portable = root / "dist" / "ApplicationAssistant-Windows-Local"
 manifest = json.loads((portable / "build-manifest.json").read_text())
 version = manifest["version"]
 files = []
-for directory in ["app", "frontend", "Ajuda"]:
+for directory in ["app", "frontend", "Ajuda", "runtime", "browsers"]:
     files.extend(p for p in (portable / directory).rglob("*") if p.is_file())
 files.append(portable / "build-manifest.json")
 assert all(p.is_relative_to(portable) for p in files)

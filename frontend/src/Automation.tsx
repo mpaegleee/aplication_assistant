@@ -48,7 +48,7 @@ export function RunSummary({ state }: { state: AppState }) {
         {[
           ["Encontradas", run.found ?? "—"],
           ["Aderentes", run.eligible ?? "—"],
-          ["Aceitas pelo SMTP", run.sent],
+          ["Concluídas pelo conector", run.sent],
           ["Pendências", run.pending ?? "—"],
         ].map(([label, value]) => (
           <div className="stat" key={label}>
@@ -125,6 +125,7 @@ export function AutomationPanel({ state, act, busy, go }: Props) {
         </div>
         <p>
           <small>
+            {metrics.browser_confirmed || 0} confirmadas por portal ·{" "}
             {metrics.smtp_accepted} com aceite SMTP · {metrics.reported_manual}{" "}
             envios informados manualmente · {metrics.current.interview || 0} em
             entrevista · {metrics.pending} pendências atuais. Estes números não
@@ -197,7 +198,7 @@ export function AutomationPanel({ state, act, busy, go }: Props) {
           </label>
           <h3>Onde pesquisar</h3>
           {state.connectors
-            .filter((c) => c.id !== "email")
+            .filter((c) => c.id !== "email" && c.id !== "inhire")
             .map((c) => (
               <label className="toggle-row" key={c.id}>
                 <span>

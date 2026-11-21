@@ -21,6 +21,8 @@ from .ai import AI
 from .matching import exact_quote
 from .sources import public_fetch, read_source
 from .mail import parse_followup, email_eligible
+from .browser import BrowserManager
+from .browser_api import install_browser_routes
 
 
 def data_directory():
@@ -72,6 +74,8 @@ FOLLOWUP_STATES = STAGES | {
 def create_app(directory=None, static_dir=None, enable_scheduler=True):
     store = Store(directory or data_directory())
     engine = Engine(store)
+    browser = BrowserManager(store)
+    engine.browser = browser
     lock = FileLock(str(store.directory / "instance.lock"))
 
     @asynccontextmanager
@@ -103,11 +107,12 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
                 engine.thread.join(timeout=120)
             if engine.mail_thread and engine.mail_thread.is_alive():
                 engine.mail_thread.join(timeout=60)
+            browser.close()
             lock.release()
 
     app = FastAPI(
         title="Application Assistant",
-        version="0.2.0",
+        version="0.3.0",
         lifespan=lifespan,
         docs_url=None,
         redoc_url=None,
@@ -141,7 +146,7 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
                 "X-Frame-Options": "DENY",
                 "Referrer-Policy": "no-referrer",
                 "Cache-Control": "no-store",
-                "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'",
+                "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'",
             }
         )
         return response
@@ -149,6 +154,8 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
     def auth(request: Request):
         if not store.authenticated(request.cookies.get("aa_session", "")):
             raise HTTPException(401, "Entre com a senha da instalação.")
+
+    install_browser_routes(app, browser, engine, auth)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request, exc):
@@ -196,7 +203,7 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
 
     @app.get("/api/health")
     def health():
-        return {"ok": True, "version": "0.2.0"}
+        return {"ok": True, "version": "0.3.0"}
 
     @app.get("/api/session")
     def session(request: Request):
@@ -240,7 +247,7 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
             j.pop("submitted_profile", None)
             j["email_eligible"] = email_eligible(j)
         return {
-            "version": "0.2.0",
+            "version": "0.3.0",
             "profile": engine.profile(),
             "settings": settings,
             "jobs": jobs,

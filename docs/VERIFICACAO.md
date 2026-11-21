@@ -39,3 +39,14 @@ Autenticação e origem; bloqueio de área apesar de nota potencial alta; perfil
 
 ## Próximo aceite
 Seguir TESTE-LOCAL.md em Windows 10/11 x64. Validar abertura do pacote, PDF real, provedor escolhido, permissões de dados e envio para caixa de teste controlada pelo mantenedor. Depois decidir distribuição e próximos conectores. O código foi mantido local; publicação está adiada conforme solicitado.
+
+## Atualização 0.3.0 — navegador interno
+
+- 85 testes passaram em Python 3.12 e 3.14, incluindo dois testes de integração com Chromium real, sandbox habilitado e páginas HTTPS fornecidas exclusivamente por fixtures em memória.
+- A integração exerceu preflight de perguntas, autorização antes de compartilhar dados, preenchimento, seleção de respostas, upload PDF, mensagem nova de sucesso e captura PNG. Nenhum site recebeu candidatura real.
+- O controle WebSocket foi exercitado com autenticação, recusa de origem externa, expiração/logout, imagem JPEG, clique, digitação, liberação de controle e restauração de cookie numa nova instância do Chromium.
+- Sessões foram conferidas no armazenamento criptografado e ausentes de estado/API/exportação; cookies de provedores de identidade não são persistidos.
+- A rotina foi exercitada com tentativa persistida, limite, pausa imediatamente antes do clique, modo de revisão, comprovante e bloqueio de repetição após sucesso ou resultado incerto.
+- URLs InHire com fontes/slugs diferentes e os dois formatos públicos Gupy são deduplicados por identificador.
+- TypeScript e build Vite passaram. Não houve inspeção visual da interface pelo navegador de ferramentas: esse recurso não estava disponível no ambiente.
+- O pacote inclui runtime e driver Windows, Chromium correspondente e hashes. Execução nativa Windows, Docker com Chromium, autenticação real e envio real aos portais continuam pendentes. Ver cobertura detalhada em ATUALIZACAO-0.3.0.md; as limitações anteriores sobre automação exclusiva SMTP são substituídas pelo fluxo InHire experimental.
