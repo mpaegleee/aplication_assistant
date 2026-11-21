@@ -53,8 +53,12 @@ def apply_suggestion(store, suggestion, auto=False):
     return True
 
 
-def sync_mail(store, settings, engine_lock, stop=None):
-    if not settings["imap_enabled"]:
+def sync_mail(store, settings, engine_lock, stop=None, *, on_alert=None):
+    from .linkedin_alerts import ALERT_SENDER, parse_alert
+
+    alerts = on_alert is not None
+    mode = "linkedin_alert" if alerts else "mail"
+    if not alerts and not settings["imap_enabled"]:
         raise ValueError("Habilite a leitura IMAP nas configurações.")
     if (
         not settings["imap_host"]
@@ -62,11 +66,12 @@ def sync_mail(store, settings, engine_lock, stop=None):
         or not settings["imap_password"]
     ):
         raise ValueError("Configure servidor, usuário e senha de aplicativo IMAP.")
-    state = store.get("mail_status", default={})
+    state = store.get(mode + "_status", default={})
     state.update(
         last_poll=time.time(), last_checked_at=now(), error="", imported=0, updated=0
     )
-    store.put("mail_status", state)
+    state["found"] = 0
+    store.put(mode + "_status", state)
     connection = None
     try:
         connection = imaplib.IMAP4_SSL(
@@ -79,8 +84,12 @@ def sync_mail(store, settings, engine_lock, stop=None):
         result, _ = connection.select(settings["imap_folder"], readonly=True)
         if result != "OK":
             raise ValueError("Não foi possível abrir a pasta IMAP configurada.")
-        date = (datetime.now(timezone.utc) - timedelta(days=15)).strftime("%d-%b-%Y")
-        result, data = connection.uid("search", None, "SINCE", date)
+        days = settings["max_job_age_days"] if alerts else 15
+        date = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%d-%b-%Y")
+        criteria = ["SINCE", date]
+        if alerts:
+            criteria += ["FROM", ALERT_SENDER]
+        result, data = connection.uid("search", None, *criteria)
         if result != "OK":
             raise ValueError("Não foi possível consultar mensagens recentes.")
         account = hashlib.sha256(
@@ -92,7 +101,7 @@ def sync_mail(store, settings, engine_lock, stop=None):
                 + settings["imap_folder"]
             ).encode()
         ).hexdigest()
-        cursor = store.get("mail_cursor", account, default={})
+        cursor = store.get(mode + "_cursor", account, default={})
         validity = connection.response("UIDVALIDITY")[1]
         validity = repr(validity)
         last = int(cursor.get("uid", 0)) if cursor.get("validity") == validity else 0
@@ -104,7 +113,9 @@ def sync_mail(store, settings, engine_lock, stop=None):
         )
 
         def advance(uid):
-            store.put("mail_cursor", {"uid": int(uid), "validity": validity}, account)
+            store.put(
+                mode + "_cursor", {"uid": int(uid), "validity": validity}, account
+            )
 
         for uid in uids:
             if stop and stop.is_set():
@@ -138,21 +149,26 @@ def sync_mail(store, settings, engine_lock, stop=None):
                 advance(uid)
                 continue
             identity = hashlib.sha256(content).hexdigest()
-            if store.get("mail_seen", identity):
+            if store.get(mode + "_seen", identity):
                 advance(uid)
                 continue
             with engine_lock:
-                suggestion = parse_followup(content, store.all("jobs"))
-                if suggestion["candidates"]:
-                    suggestion["created_at"] = now()
-                    suggestion["origin"] = "imap"
-                    updated = apply_suggestion(
-                        store, suggestion, settings["auto_followup"]
-                    )
-                    store.put("followups", suggestion, suggestion["id"])
-                    state["imported"] += 1
-                    state["updated"] += int(updated)
-                store.put("mail_seen", {"at": now()}, identity)
+                if alerts:
+                    for job in parse_alert(content):
+                        state["found"] += 1
+                        state["imported"] += int(on_alert(job))
+                else:
+                    suggestion = parse_followup(content, store.all("jobs"))
+                    if suggestion["candidates"]:
+                        suggestion["created_at"] = now()
+                        suggestion["origin"] = "imap"
+                        updated = apply_suggestion(
+                            store, suggestion, settings["auto_followup"]
+                        )
+                        store.put("followups", suggestion, suggestion["id"])
+                        state["imported"] += 1
+                        state["updated"] += int(updated)
+                store.put(mode + "_seen", {"at": now()}, identity)
                 advance(uid)
     except imaplib.IMAP4.error:
         state["error"] = (
@@ -172,5 +188,5 @@ def sync_mail(store, settings, engine_lock, stop=None):
                 connection.logout()
             except Exception:
                 pass
-        store.put("mail_status", state)
+        store.put(mode + "_status", state)
     return state

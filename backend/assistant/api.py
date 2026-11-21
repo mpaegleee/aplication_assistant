@@ -347,10 +347,15 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
                 "followup": "eml",
             },
             "configured_sources": configured_sources,
+            "linkedin_alert_status": store.get("linkedin_alert_status", default={}),
             "search_portal_issues": {
                 platform: issue
                 for platform in ("linkedin", "indeed")
                 if platform in search_platforms
+                and (
+                    platform != "linkedin"
+                    or settings["linkedin_search_method"] == "browser"
+                )
                 and (issue := engine.portal_search_issue(platform))
             },
             "pdf_imported": bool(pdf),

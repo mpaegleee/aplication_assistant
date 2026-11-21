@@ -276,24 +276,49 @@ export function AutomationPanel({ state, act, busy, go, setup }: Props) {
               }
             />
           </label>
-          <label className="toggle-row">
-            <span>
-              Incluir publicações do LinkedIn com oportunidades e instruções de
-              e-mail
-            </span>
-            <input
-              type="checkbox"
-              checked={s.linkedin_posts_enabled}
-              onChange={(e) =>
-                change("linkedin_posts_enabled", e.target.checked)
-              }
-            />
-          </label>
+          {s.search_platforms.includes("linkedin") && (
+            <label className="field">
+              <span>Como encontrar vagas do LinkedIn</span>
+              <select
+                value={s.linkedin_search_method || "browser"}
+                onChange={(event) =>
+                  change("linkedin_search_method", event.target.value)
+                }
+              >
+                <option value="browser">
+                  Pesquisar pelo navegador interno
+                </option>
+                <option value="email">
+                  Importar alertas do LinkedIn por e-mail
+                </option>
+              </select>
+              {s.linkedin_search_method === "email" && (
+                <small>
+                  Ative alertas por e-mail no LinkedIn e configure a leitura
+                  IMAP. A busca usará os alertas recebidos.
+                </small>
+              )}
+            </label>
+          )}
+          {s.linkedin_search_method !== "email" && (
+            <label className="toggle-row">
+              <span>
+                Incluir publicações do LinkedIn com oportunidades e instruções
+                de e-mail
+              </span>
+              <input
+                type="checkbox"
+                checked={s.linkedin_posts_enabled}
+                onChange={(e) =>
+                  change("linkedin_posts_enabled", e.target.checked)
+                }
+              />
+            </label>
+          )}
           <p>
-            LinkedIn e Indeed usam o navegador interno e a sessão salva. Gupy lê
-            páginas de empresas cadastradas como fontes. Uma mudança de layout
-            ou verificação deixa uma pendência. Os conectores de busca são
-            experimentais.
+            O LinkedIn pode usar alertas do e-mail ou o navegador interno. O
+            Indeed usa o navegador e a sessão salva. A Gupy lê as páginas de
+            empresas cadastradas como fontes.
           </p>
           <h3>Onde pesquisar</h3>
           {state.connectors

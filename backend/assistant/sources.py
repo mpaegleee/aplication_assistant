@@ -324,6 +324,13 @@ def application_identity(url):
     value = canonical_url(url)
     parsed = urlsplit(value)
     host = (parsed.hostname or "").lower()
+    if host in ("www.linkedin.com", "linkedin.com"):
+        match = re.fullmatch(
+            r"/(?:comm/)?jobs/view/(?:[^/]*-)?([0-9]{1,20})", parsed.path
+        )
+        if match:
+            # Keep the canonical URL identity already used by manually saved alerts.
+            return f"https://www.linkedin.com/jobs/view/{match[1]}"
     if host.endswith(".inhire.app"):
         match = re.search(r"/vagas/([a-fA-F0-9-]{36})(?:/|$)", parsed.path)
         if match:

@@ -85,6 +85,7 @@ export type Settings = {
   allowed_destinations: string[];
   browser_search_queries: string[];
   linkedin_posts_enabled: boolean;
+  linkedin_search_method: "browser" | "email";
   experimental_portal_submission: boolean;
   share_with_enabled_portals: boolean;
   auto_classify_areas: boolean;
@@ -203,6 +204,12 @@ export type AppState = {
   running: boolean;
   configured_sources?: string[];
   search_portal_issues?: Record<string, string>;
+  linkedin_alert_status?: {
+    last_checked_at?: string;
+    error?: string;
+    found?: number;
+    imported?: number;
+  };
   pdf_imported: boolean;
   pdf_filename?: string | null;
   connectors: {

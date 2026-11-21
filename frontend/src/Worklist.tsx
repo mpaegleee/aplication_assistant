@@ -44,7 +44,11 @@ export function Worklist({ state, busy, act, openBrowser, go }: Props) {
       tab === "archived"
         ? j.archived
         : !j.archived &&
-          (tab === "review" ? !entries.has(j.id) : entries.has(j.id)),
+          (tab === "alerts"
+            ? j.source === "linkedin_alert"
+            : tab === "review"
+              ? !entries.has(j.id)
+              : entries.has(j.id)),
     )
     .filter(
       (j) =>
@@ -119,24 +123,46 @@ export function Worklist({ state, busy, act, openBrowser, go }: Props) {
             para selecionar os portais ou adicionar um feed.
           </p>
         )}
-        {state.settings.search_platforms.includes("linkedin") && (
-          <div className="notice">
-            <p>
-              Se o LinkedIn bloquear o navegador interno, pesquise no seu
-              navegador e copie o link e a descrição. Use{" "}
-              <strong>Colar anúncio de vaga</strong> para trazer a oportunidade
-              para a fila.
-            </p>
-            <a
-              className="secondary"
-              href={linkedinSearchUrl(state)}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Abrir busca do LinkedIn no meu navegador
-            </a>
-          </div>
-        )}
+        {state.settings.search_platforms.includes("linkedin") &&
+          state.settings.linkedin_search_method !== "email" && (
+            <div className="notice">
+              <p>
+                Se o LinkedIn bloquear o navegador interno, pesquise no seu
+                navegador e copie o link e a descrição. Use{" "}
+                <strong>Colar anúncio de vaga</strong> para trazer a
+                oportunidade para a fila.
+              </p>
+              <a
+                className="secondary"
+                href={linkedinSearchUrl(state)}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Abrir busca do LinkedIn no meu navegador
+              </a>
+              <button className="secondary" onClick={() => go("setup")}>
+                Configurar coleta por alertas de e-mail
+              </button>
+            </div>
+          )}
+        {state.settings.search_platforms.includes("linkedin") &&
+          state.settings.linkedin_search_method === "email" && (
+            <div className="notice">
+              <p>
+                As vagas dos alertas do LinkedIn entram na fila sem copiar
+                anúncios. Os e-mails com somente uma prévia ficam para revisão.
+              </p>
+              <button
+                className="secondary"
+                onClick={() => {
+                  setTab("alerts");
+                  setVisible(20);
+                }}
+              >
+                Ver alertas importados
+              </button>
+            </div>
+          )}
         {Object.entries(state.search_portal_issues || {}).map(
           ([platform, issue]) => (
             <div className="notice" key={platform}>
@@ -192,6 +218,7 @@ export function Worklist({ state, busy, act, openBrowser, go }: Props) {
             <select value={tab} onChange={(e) => setTab(e.target.value)}>
               <option value="eligible">Aderentes e prontas</option>
               <option value="review">Revisar informações ou análise</option>
+              <option value="alerts">Alertas do LinkedIn</option>
               <option value="archived">Arquivadas</option>
             </select>
           </label>

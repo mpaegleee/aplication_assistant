@@ -61,9 +61,8 @@ def worklist(profile, settings, jobs):
                 "score": a["score"],
                 "confidence": a["confidence"],
                 "destination": destination,
-                "automatic_available": capabilities.get(destination, {}).get(
-                    "submission", False
-                )
+                "automatic_available": job.get("source") != "linkedin_alert"
+                and capabilities.get(destination, {}).get("submission", False)
                 and (
                     not capabilities.get(destination, {}).get("experimental")
                     or settings["experimental_portal_submission"]

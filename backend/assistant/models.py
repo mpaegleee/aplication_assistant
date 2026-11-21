@@ -114,6 +114,7 @@ class Settings(Model):
     )
     browser_search_queries: list[str] = Field(default_factory=list, max_length=10)
     linkedin_posts_enabled: bool = True
+    linkedin_search_method: Literal["browser", "email"] = "browser"
     experimental_portal_submission: bool = False
     share_with_enabled_portals: bool = False
     auto_classify_areas: bool = False

@@ -120,6 +120,7 @@ class Engine:
                         data[field] = existing[field]
                 if (
                     existing["status"] not in TERMINAL
+                    and data.get("source") != "linkedin_alert"
                     and existing["description"] != data["description"]
                 ):
                     existing.update(
@@ -545,6 +546,12 @@ class Engine:
         )
         if reason:
             return self.pending(job, "outside_window", reason)
+        if job.get("source") == "linkedin_alert" and not job.get("area_reviewed"):
+            return self.pending(
+                job,
+                "alert_review",
+                "Vaga recebida por alerta. Abra a vaga para conferir a descrição e a área.",
+            )
         job = self.analyze(job["id"])
         if job["status"] == "blocked":
             return self.pending(job, "blocked", " ".join(job["analysis"]["blocks"]))
@@ -560,6 +567,12 @@ class Engine:
                 job,
                 "manual_ready",
                 "Vaga aderente consolidada. Pronta para candidatura manual na aplicação.",
+            )
+        if job.get("source") == "linkedin_alert":
+            return self.pending(
+                job,
+                "alert_review",
+                "Vaga recebida por alerta. Confira os detalhes no LinkedIn antes de se candidatar.",
             )
         destination = (
             "email"
@@ -722,6 +735,69 @@ class Engine:
             for platform in ("linkedin", "indeed"):
                 if platform not in settings["search_platforms"]:
                     continue
+                if (
+                    platform == "linkedin"
+                    and settings["linkedin_search_method"] == "email"
+                ):
+                    if not interrupted():
+                        entry = {
+                            "name": "Alertas do LinkedIn por e-mail",
+                            "platform": platform,
+                            "found": 0,
+                            "new": 0,
+                            "duplicates": 0,
+                            "status": "running",
+                        }
+                        run["sources"].append(entry)
+                        try:
+                            existing_alert_ids = {
+                                application_identity(j["url"]): j["id"]
+                                for j in self.store.all("jobs")
+                                if j.get("url") and platform_for(j["url"]) == "linkedin"
+                            }
+
+                            def add_alert(job):
+                                origin = {
+                                    "url": job["url"],
+                                    "platform": "linkedin",
+                                    "source": entry["name"],
+                                }
+                                if existing_id := existing_alert_ids.get(
+                                    application_identity(job["url"])
+                                ):
+                                    saved = self.require_job(existing_id)
+                                    origins = saved.setdefault("origins", [])
+                                    if origin not in origins:
+                                        origins.append(origin)
+                                        self.store.put("jobs", saved, existing_id)
+                                    return False
+                                saved, new = self.add_job(job, origin)
+                                existing_alert_ids[application_identity(job["url"])] = (
+                                    saved["id"]
+                                )
+                                return new
+
+                            result = self.sync_mail(on_alert=add_alert)
+                            entry.update(
+                                found=result["found"],
+                                new=result["imported"],
+                                duplicates=result["found"] - result["imported"],
+                                status="pending" if result["error"] else "completed",
+                            )
+                            for counter, value in (
+                                ("found", entry["found"]),
+                                ("imported", entry["new"]),
+                                ("duplicates", entry["duplicates"]),
+                            ):
+                                run[counter] += value
+                            if result["error"]:
+                                run["errors"].append(
+                                    entry["name"] + ": " + result["error"]
+                                )
+                        except ValueError as exc:
+                            entry["status"] = "pending"
+                            run["errors"].append(entry["name"] + ": " + str(exc))
+                    continue
                 issue = self.portal_search_issue(platform) or (
                     ""
                     if queries
@@ -871,6 +947,16 @@ class Engine:
                     if job.get("pending_code") != "outside_window":
                         self.pending(job, "outside_window", reason)
                     continue
+                if job.get("source") == "linkedin_alert" and not job.get(
+                    "area_reviewed"
+                ):
+                    self.pending(
+                        job,
+                        "alert_review",
+                        "Vaga recebida por alerta. Abra a vaga para conferir a descrição e a área.",
+                    )
+                    run["pending"] += 1
+                    continue
                 jobs.append(job)
             jobs.sort(key=lambda j: j.get("last_processed_at", ""))
             jobs = jobs[: settings["max_jobs_per_run"]]
@@ -966,13 +1052,19 @@ class Engine:
             self.store.put("runs", run, run["id"])
             self.running = False
 
-    def sync_mail(self):
-        if not self.mail_lock.acquire(blocking=False):
+    def sync_mail(self, *, on_alert=None):
+        if not (
+            self.mail_lock.acquire(timeout=15)
+            if on_alert is not None
+            else self.mail_lock.acquire(blocking=False)
+        ):
             raise ValueError("Leitura de e-mail já está em andamento.")
         try:
             from .mail_sync import sync_mail
 
-            return sync_mail(self.store, self.settings(), self.lock, self.stop)
+            return sync_mail(
+                self.store, self.settings(), self.lock, self.stop, on_alert=on_alert
+            )
         finally:
             self.mail_lock.release()
 

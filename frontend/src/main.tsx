@@ -937,7 +937,9 @@ function SetupGuide({
   const settings = state.settings;
   const sources = state.configured_sources || [];
   const portals = sources.filter(
-    (source) => source === "linkedin" || source === "indeed",
+    (source): source is "linkedin" | "indeed" =>
+      source === "indeed" ||
+      (source === "linkedin" && settings.linkedin_search_method !== "email"),
   );
   const portalIssues = state.search_portal_issues || {};
   const missingSessions = portals.filter((portal) =>
@@ -948,6 +950,15 @@ function SetupGuide({
     missingSessions[0] ||
     portals[0];
   const portalNames = { linkedin: "LinkedIn", indeed: "Indeed" };
+  const useLinkedInAlerts =
+    sources.includes("linkedin") && settings.linkedin_search_method === "email";
+  const missingAlertMailbox =
+    useLinkedInAlerts &&
+    !(
+      settings.imap_host &&
+      settings.imap_user &&
+      settings.imap_password_configured
+    );
   const model = `${settings.ai_url}|${settings.ai_model}`;
   const steps = [
     "Inteligência artificial",
@@ -961,7 +972,9 @@ function SetupGuide({
     !!settings.ai_model &&
     state.profile.confirmed &&
     sources.some(
-      (source) => !missingSessions.some((portal) => portal === source),
+      (source) =>
+        !missingSessions.some((portal) => portal === source) &&
+        (source !== "linkedin" || !missingAlertMailbox),
     );
   const disabledReasons = [
     !settings.ai_consent || !settings.ai_model
@@ -973,6 +986,9 @@ function SetupGuide({
     !sources.length ? "Salve pelo menos uma fonte habilitada na rotina." : "",
     missingSessions.length
       ? `Conecte as contas em: ${missingSessions.map((portal) => portalNames[portal]).join(", ")}.`
+      : "",
+    missingAlertMailbox
+      ? "Configure a caixa IMAP que recebe os alertas do LinkedIn na etapa Conectar contas."
       : "",
   ].filter(Boolean);
   async function addSource() {
@@ -1169,8 +1185,29 @@ function SetupGuide({
               </>
             )}
           </section>
-          <details>
-            <summary>Configurar envio por e-mail, se for usar</summary>
+          {useLinkedInAlerts && (
+            <section className="panel">
+              <h3>Caixa de alertas do LinkedIn</h3>
+              <p>
+                Ative o envio por e-mail dos alertas de vaga no LinkedIn.
+                Configure abaixo a conta e a pasta IMAP que recebem esses
+                e-mails. A leitura de respostas é opcional.
+              </p>
+              <a
+                href="https://www.linkedin.com/jobs/"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Configurar alertas no LinkedIn
+              </a>
+            </section>
+          )}
+          <details open={useLinkedInAlerts || undefined}>
+            <summary>
+              {useLinkedInAlerts
+                ? "Configurar e-mail de coleta"
+                : "Configurar e-mail, se for usar"}
+            </summary>
             <SettingsPage state={state} act={act} busy={busy} section="email" />
           </details>
         </>
@@ -2946,7 +2983,7 @@ function SettingsPage({
         )}
         {tab === "email" && (
           <section className="source-card">
-            <h3>Acompanhamento automático por IMAP</h3>
+            <h3>Leitura de alertas e respostas por IMAP</h3>
             <p>
               Leitura com TLS e senha de aplicativo. Provedores que exigem OAuth
               ainda não são suportados. Nenhuma mensagem é enviada por este
