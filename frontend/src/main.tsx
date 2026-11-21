@@ -404,6 +404,7 @@ function App() {
     profile: "Meu perfil",
     worklist: "Vagas consolidadas",
     jobs: "Oportunidades",
+    "new-job": "Oportunidades",
     applications: "Minhas candidaturas",
     followups: "Retornos",
     schedule: "Agenda e execuções",
@@ -439,7 +440,11 @@ function App() {
               key={key}
               aria-label={label}
               title={label}
-              className={page === key ? "active" : ""}
+              className={
+                page === key || (page === "new-job" && key === "jobs")
+                  ? "active"
+                  : ""
+              }
               onClick={() => {
                 setPage(key);
                 setError("");
@@ -594,8 +599,12 @@ function App() {
           {page === "profile" && (
             <ProfilePage state={state} act={act} busy={busy} />
           )}
-          {(page === "jobs" || page === "applications") && (
+          {(page === "jobs" ||
+            page === "new-job" ||
+            page === "applications") && (
             <JobsPage
+              key={page}
+              newJob={page === "new-job"}
               state={state}
               act={act}
               busy={busy}
@@ -1956,10 +1965,13 @@ function JobsPage({
   act,
   busy,
   applications,
-}: Common & { applications: boolean }) {
+  newJob,
+}: Common & { applications: boolean; newJob: boolean }) {
   const [query, setQuery] = useState(""),
     [filter, setFilter] = useState("all"),
-    [editing, setEditing] = useState<JobInput | null>(null),
+    [editing, setEditing] = useState<JobInput | null>(
+      newJob ? { ...emptyJob, country: "unknown" } : null,
+    ),
     [editId, setEditId] = useState(""),
     [selected, setSelected] = useState(""),
     [importing, setImporting] = useState(false),
@@ -2150,6 +2162,12 @@ function JobsPage({
               }, "Oportunidade salva.");
             }}
           >
+            {newJob && !editId && (
+              <p>
+                Cole o link e a descrição do anúncio do seu navegador. Confirme
+                a empresa, a área e o país antes de usar a vaga para análise.
+              </p>
+            )}
             <div className="form-grid">
               <Field label="Cargo">
                 <input

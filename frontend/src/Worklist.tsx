@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ActionFeedback, type Action, type Feedback } from "./ActionFeedback";
 import { api } from "./api";
 import { RunSummary } from "./Automation";
+import { linkedinSearchUrl } from "./portalLinks";
 import type { AppState, Job } from "./types";
 
 type Props = {
@@ -101,8 +102,8 @@ export function Worklist({ state, busy, act, openBrowser, go }: Props) {
           <button className="secondary" onClick={() => go("setup")}>
             Configuração guiada
           </button>
-          <button className="secondary" onClick={() => go("jobs")}>
-            Importar vaga ou revisar cadastro
+          <button className="secondary" onClick={() => go("new-job")}>
+            Colar anúncio de vaga
           </button>
           <ActionFeedback feedback={collectFeedback} />
         </div>
@@ -117,6 +118,24 @@ export function Worklist({ state, busy, act, openBrowser, go }: Props) {
             Nenhuma fonte de busca foi configurada. Use a configuração guiada
             para selecionar os portais ou adicionar um feed.
           </p>
+        )}
+        {state.settings.search_platforms.includes("linkedin") && (
+          <div className="notice">
+            <p>
+              Se o LinkedIn bloquear o navegador interno, pesquise no seu
+              navegador e copie o link e a descrição. Use{" "}
+              <strong>Colar anúncio de vaga</strong> para trazer a oportunidade
+              para a fila.
+            </p>
+            <a
+              className="secondary"
+              href={linkedinSearchUrl(state)}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Abrir busca do LinkedIn no meu navegador
+            </a>
+          </div>
         )}
         {Object.entries(state.search_portal_issues || {}).map(
           ([platform, issue]) => (

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api";
+import { linkedinSearchUrl } from "./portalLinks";
 import type { AppState } from "./types";
 
 type Session = {
@@ -211,6 +212,23 @@ export function BrowserPage({
           Apagar sessão local
         </button>
       </div>
+      {platform === "linkedin" && (
+        <div className="notice">
+          <p>
+            Se o LinkedIn pedir uma verificação que não conclui aqui, abra a
+            busca no seu navegador habitual. A sessão desse navegador serve para
+            pesquisar e candidatar manualmente.
+          </p>
+          <a
+            className="secondary"
+            href={linkedinSearchUrl(state)}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Abrir busca do LinkedIn no meu navegador
+          </a>
+        </div>
+      )}
       <p>
         {sessions.find((s) => s.id === platform)?.saved_at
           ? "Há uma sessão salva. Sua validade será verificada pelo próprio portal."

@@ -10,6 +10,6 @@ Feche a versão em uso e atualize com o novo instalador Windows ou pacote Linux.
 4. Use **Salvar sessão e liberar controle**. Uma sessão armazenada pode expirar. O próprio portal determina se ela continua válida.
 5. Em **Teste de coleta**, inicie uma busca sem envio. Se apenas um portal estiver conectado, a busca pode usar esse portal e as fontes públicas já configuradas.
 
-Em **Vagas consolidadas**, uma pendência de conexão abre diretamente o portal correspondente no navegador da aplicação. Uma consulta bloqueada aparece no resumo, junto ao motivo. Se o portal recusar a verificação mesmo com a interação manual, use outra fonte disponível ou importe vagas manualmente enquanto isso.
+Em **Vagas consolidadas**, uma pendência de conexão abre diretamente o portal correspondente no navegador da aplicação. Uma consulta bloqueada aparece no resumo, junto ao motivo. Se o LinkedIn recusar a verificação no navegador interno, pressione **Abrir busca do LinkedIn no meu navegador**. Entre e pesquise no Edge, Chrome ou outro navegador habitual. Copie o link e a descrição e use **Colar anúncio de vaga** em Vagas consolidadas. Isso permite analisar a vaga e preparar o currículo. A busca automática pelo LinkedIn continua dependendo de uma sessão aceita no navegador interno.
 
 O instalador Windows desta prévia ainda está sem assinatura Authenticode. O Edge pode mostrar um aviso de reputação.
