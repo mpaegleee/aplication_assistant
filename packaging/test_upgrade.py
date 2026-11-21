@@ -4,7 +4,6 @@ import argparse
 import hashlib
 import io
 import os
-from pathlib import Path
 import shutil
 import socket
 import subprocess
@@ -13,13 +12,13 @@ import tarfile
 import tempfile
 import time
 from contextlib import contextmanager
+from pathlib import Path
 from urllib.request import urlopen
 
 import httpx
-from reportlab.pdfgen.canvas import Canvas
-
 from assistant.history import record_stage
 from assistant.store import Store
+from reportlab.pdfgen.canvas import Canvas
 
 BASE = "https://github.com/mpaegleee/aplication_assistant/releases/download/v0.5.0/"
 PREVIOUS = {
@@ -49,7 +48,7 @@ def previous_package(platform, root):
     return path
 
 
-def install(platform, package, root, env):
+def install(platform, package, root, env, *, previous=False):
     if platform == "windows":
         app_path = root / "program"
         subprocess.run(
@@ -66,7 +65,18 @@ def install(platform, package, root, env):
         return app_path / "ApplicationAssistant.exe"
     with tempfile.TemporaryDirectory(dir=root) as staging:
         with tarfile.open(package) as archive:
-            archive.extractall(staging, filter="data")
+            if previous:
+                # The published Linux 0.5.0 included the build virtualenv as its
+                # runtime. Install exactly its app and UI, using the runner's
+                # interpreter to create the database with the previous code.
+                members = (
+                    item
+                    for item in archive
+                    if not item.name.startswith("ApplicationAssistant-Linux/runtime/")
+                )
+                archive.extractall(staging, members=members, filter="data")
+            else:
+                archive.extractall(staging, filter="data")
         subprocess.run(
             [str(Path(staging) / "ApplicationAssistant-Linux" / "Instalar.sh")],
             env=env,
@@ -77,11 +87,9 @@ def install(platform, package, root, env):
 
 
 @contextmanager
-def app_session(launcher, env, version, log):
+def app_session(command, env, version, log):
     with log.open("w+") as output:
-        process = subprocess.Popen(
-            [str(launcher)], env=env, stdout=output, stderr=output
-        )
+        process = subprocess.Popen(command, env=env, stdout=output, stderr=output)
         try:
             with httpx.Client(
                 base_url=f"http://127.0.0.1:{env['AA_PORT']}",
@@ -173,8 +181,12 @@ def verify_upgrade(platform, package, version, root):
     }
     # Point the installed app at its own bundled Chromium.
     env.pop("PLAYWRIGHT_BROWSERS_PATH", None)
-    launcher = install(platform, prior, root, env)
-    with app_session(launcher, env, "0.5.0", root / "old.log") as client:
+    launcher = install(platform, prior, root, env, previous=True)
+    if platform == "linux":
+        previous_command = [sys.executable, str(launcher.parent / "app/launcher.py")]
+    else:
+        previous_command = [str(launcher)]
+    with app_session(previous_command, env, "0.5.0", root / "old.log") as client:
         job_id, document = write_test_data(client)
     store = Store(data)
     job = store.get("jobs", job_id)
@@ -184,7 +196,7 @@ def verify_upgrade(platform, package, version, root):
     original_key = (data / "vault.key").read_bytes()
 
     assert install(platform, package, root, env) == launcher
-    with app_session(launcher, env, version, root / "new.log") as client:
+    with app_session([str(launcher)], env, version, root / "new.log") as client:
         client.post("/api/login", json={"password": PASSWORD}).raise_for_status()
         state = client.get("/api/state").raise_for_status().json()
         assert state["profile"]["name"] == "Pessoa Teste"

@@ -15,6 +15,8 @@ Se configurou `AA_DATA_DIR`, continue a apontá-la para a mesma pasta. Preserve 
 
 Uma futura distribuição para macOS deverá guardar dados fora do pacote da aplicação, manter um caminho de dados estável para cada usuário e testar a atualização de uma versão anterior antes da publicação.
 
+O pacote Linux 0.6.0 inclui o runtime portátil completo. A distribuição Linux anterior podia apontar para o Python da máquina de build.
+
 ## Configuração guiada
 
 Abra **Configuração guiada** no menu. Nas instalações novas, ela aparece depois de criar a senha.

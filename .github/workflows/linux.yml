@@ -36,7 +36,7 @@ jobs:
           .venv/bin/python -m pytest -q backend/tests
       - name: Empacotar Linux e código
         run: |
-          aa_runtime=$(dirname "$(dirname "$(uv python find 3.14.10)")")
+          aa_runtime=$(dirname "$(dirname "$(uv python find --system --managed-python --resolve-links 3.14.10)")")
           .venv/bin/python packaging/build_linux.py --runtime "$aa_runtime" --site .venv/lib/python3.14/site-packages --browsers browsers
           git archive --format=zip --prefix=Application-Assistant/ -o dist/ApplicationAssistant-Codigo-0.6.0.zip HEAD
           sha256sum dist/ApplicationAssistant-Codigo-0.6.0.zip > dist/ApplicationAssistant-Codigo-0.6.0.zip.sha256

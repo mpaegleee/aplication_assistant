@@ -1,18 +1,31 @@
 """Read publication and closing dates without an AI call."""
 
 import re
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from email.utils import parsedate_to_datetime
 
 from .matching import normalized
 
-MONTHS = "janeiro fevereiro março abril maio junho julho agosto setembro outubro novembro dezembro".split()
+MONTHS = [
+    "janeiro",
+    "fevereiro",
+    "março",
+    "abril",
+    "maio",
+    "junho",
+    "julho",
+    "agosto",
+    "setembro",
+    "outubro",
+    "novembro",
+    "dezembro",
+]
 
 
 def date_string(value):
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         try:
-            return datetime.fromtimestamp(value / 1000, timezone.utc).date().isoformat()
+            return datetime.fromtimestamp(value / 1000, UTC).date().isoformat()
         except (ValueError, OverflowError, OSError):
             return ""
     if isinstance(value, str) and value.strip():
@@ -50,7 +63,7 @@ def visible_job_date(text):
         amount, unit = relative.groups()
         days = {"minuto": 0, "hora": 0, "dia": 1, "semana": 7, "mes": 30}[unit]
         return (
-            datetime.now(timezone.utc).date() - timedelta(days=int(amount) * days)
+            datetime.now(UTC).date() - timedelta(days=int(amount) * days)
         ).isoformat()
     return ""
 

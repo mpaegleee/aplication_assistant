@@ -14,6 +14,14 @@ def main():
     parser.add_argument("--site", required=True, type=Path)
     parser.add_argument("--browsers", required=True, type=Path)
     args = parser.parse_args()
+    if (args.runtime / "pyvenv.cfg").exists() or not (
+        (args.runtime / "lib/python3.14/encodings/__init__.py").is_file()
+        and (args.runtime / "bin/python3.14").resolve().parent
+        == (args.runtime / "bin").resolve()
+    ):
+        parser.error(
+            "--runtime precisa apontar para uma instalação portátil completa, fora do ambiente virtual."
+        )
     root = Path(__file__).resolve().parents[1]
     output = root / "dist/ApplicationAssistant-0.6.0-Linux-x64.tar.gz"
     output.parent.mkdir(exist_ok=True)
