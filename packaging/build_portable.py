@@ -180,11 +180,11 @@ def main():
             encoding="ascii",
         )
         (target / "LEIA-ME.txt").write_text(
-            "APPLICATION ASSISTANT - TESTE LOCAL WINDOWS 10/11 x64\n\n1. Extraia a pasta inteira do ZIP para uma pasta pessoal.\n2. Clique duas vezes em Iniciar.cmd.\n3. Mantenha a janela aberta. O navegador abre em http://127.0.0.1:8765\n4. Crie uma senha e siga Ajuda/TESTE-LOCAL.md.\n\nNao precisa instalar Python, Node.js ou Docker.\nEste pacote foi montado em Linux e ainda precisa de validacao em Windows.\nNavegador interno: login manual e sessoes locais. InHire experimental e SMTP para envio automatico. Consulte Ajuda/AUTOMATICO-0.5.0.md.\nNao ha chaves de IA, contas ou dados pessoais incluidos.\nCodigo aberto sob MIT. Versao experimental: valide a instalacao antes de distribuir como estavel.\n",
+            "APPLICATION ASSISTANT - TESTE LOCAL WINDOWS 10/11 x64\n\n1. Extraia a pasta inteira do ZIP para uma pasta pessoal.\n2. Clique duas vezes em Iniciar.cmd.\n3. Mantenha a janela aberta. O navegador abre em http://127.0.0.1:8765\n4. Crie uma senha e siga Ajuda/TESTE-LOCAL.md.\n\nNao precisa instalar Python, Node.js ou Docker.\nEste pacote foi montado em Linux e ainda precisa de validacao em Windows.\nNavegador interno: login manual e sessoes locais. InHire experimental e SMTP para envio automatico. Consulte Ajuda/ATUALIZACAO-0.6.0.md.\nNao ha chaves de IA, contas ou dados pessoais incluidos.\nCodigo aberto sob MIT. Versao experimental: valide a instalacao antes de distribuir como estavel.\n",
             encoding="utf-8",
         )
         manifest = {
-            "version": "0.5.0",
+            "version": "0.6.0",
             "target": "windows-x64",
             "runtime_url": url,
             "runtime_sha256": hashlib.sha256(blob).hexdigest(),
@@ -196,7 +196,7 @@ def main():
             json.dumps(manifest, indent=2), encoding="utf-8"
         )
     zip_path = shutil.make_archive(
-        str(output / "ApplicationAssistant-Windows-Local-0.5.0"),
+        str(output / "ApplicationAssistant-Windows-Local-0.6.0"),
         "zip",
         target.parent,
         target.name,

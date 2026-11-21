@@ -1,16 +1,19 @@
 import { useState } from "react";
+import { ActionFeedback, type Action, type Feedback } from "./ActionFeedback";
 import { api } from "./api";
+import { RunSummary } from "./Automation";
 import type { AppState, Job } from "./types";
 
 type Props = {
   state: AppState;
   busy: boolean;
-  act: (task: () => Promise<unknown>, message?: string) => Promise<void>;
+  act: Action;
   openBrowser: (target: { platform: string; job_id: string }) => void;
   go: (page: string) => void;
 };
 export function Worklist({ state, busy, act, openBrowser, go }: Props) {
   const [query, setQuery] = useState("");
+  const [collectFeedback, setCollectFeedback] = useState<Feedback | null>(null);
   const [visible, setVisible] = useState(20);
   const [minimum, setMinimum] = useState(state.settings.threshold);
   const [platform, setPlatform] = useState("");
@@ -84,28 +87,35 @@ export function Worklist({ state, busy, act, openBrowser, go }: Props) {
         <div className="button-row">
           <button
             className="primary"
-            disabled={busy || state.running || state.settings.paused}
+            disabled={busy || state.running}
             onClick={() =>
               act(
                 () => api("/runs", "POST", { action: "collect" }),
                 "Busca iniciada. As vagas serão consolidadas sem envio.",
+                setCollectFeedback,
               )
             }
           >
             Buscar e consolidar agora
           </button>
-          <button onClick={() => go("autopilot")}>
-            Configurar fontes e modo automático
+          <button className="secondary" onClick={() => go("setup")}>
+            Configuração guiada
           </button>
-          <button onClick={() => go("jobs")}>
+          <button className="secondary" onClick={() => go("jobs")}>
             Importar vaga ou revisar cadastro
           </button>
+          <ActionFeedback feedback={collectFeedback} />
         </div>
         {state.settings.paused && (
           <p className="notice">
-            A rotina está pausada. Retome em Rotina automática para iniciar a
-            busca. Você pode consultar e usar manualmente as vagas já
-            consolidadas.
+            A rotina agendada está pausada. Use o botão acima para buscar e
+            consolidar vagas sem enviar candidaturas.
+          </p>
+        )}
+        {state.configured_sources?.length === 0 && (
+          <p className="notice">
+            Nenhuma fonte de busca foi configurada. Use a configuração guiada
+            para selecionar os portais ou adicionar um feed.
           </p>
         )}
         <p>
@@ -113,6 +123,7 @@ export function Worklist({ state, busy, act, openBrowser, go }: Props) {
           {state.worklist.summary.stale} sem análise atual ·{" "}
           {state.worklist.summary.blocked} com informações ou critérios a
           revisar · {state.worklist.summary.below_threshold} abaixo dos limites
+          · {state.worklist.summary.outside_window || 0} fora do filtro de data
         </p>
         <div className="form-grid">
           <label>
@@ -160,6 +171,7 @@ export function Worklist({ state, busy, act, openBrowser, go }: Props) {
           suficientes ficam para revisão.
         </small>
       </section>
+      {state.runs[0]?.action === "collect" && <RunSummary state={state} />}
       {!rows.length && (
         <section className="panel">
           <h3>Nenhuma oportunidade neste filtro</h3>
@@ -268,7 +280,14 @@ export function Worklist({ state, busy, act, openBrowser, go }: Props) {
                     target="_blank"
                     rel="noreferrer"
                   >
-                    Ver currículo PDF desta vaga
+                    Baixar PDF desta vaga
+                  </a>
+                  <a
+                    className="secondary"
+                    href={`/api/jobs/${job.id}/resume?format=docx`}
+                    download
+                  >
+                    Baixar Word desta vaga
                   </a>
                   {entry.destination !== "email" && (
                     <button
@@ -285,7 +304,7 @@ export function Worklist({ state, busy, act, openBrowser, go }: Props) {
                     </button>
                   )}
                   {entry.destination === "email" && (
-                    <button onClick={() => go("jobs")}>
+                    <button className="secondary" onClick={() => go("jobs")}>
                       Revisar e enviar e-mail na aplicação
                     </button>
                   )}

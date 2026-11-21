@@ -11,7 +11,7 @@ Se recebeu o arquivo de código ZIP, extraia e, no seu computador com acesso de 
 ```sh
 git init -b main
 git add .
-git commit -m "Application Assistant 0.5.0"
+git commit -m "Application Assistant 0.6.0"
 git remote add origin https://github.com/mpaeglee/Application-Assistant.git
 git push -u origin main
 ```
@@ -20,9 +20,9 @@ Se já está usando um clone com commits, confira `git status`, o remoto e o his
 
 ## Artefatos da versão
 
-- `ApplicationAssistant-Setup-0.5.0-Windows-x64.exe`
-- `ApplicationAssistant-0.5.0-Linux-x64.tar.gz`
-- `ApplicationAssistant-Codigo-0.5.0.zip`
+- `ApplicationAssistant-Setup-0.6.0-Windows-x64.exe`
+- `ApplicationAssistant-0.6.0-Linux-x64.tar.gz`
+- `ApplicationAssistant-Codigo-0.6.0.zip`
 - Hashes `.sha256` e notas da versão.
 
 Não envie runtime, Chromium ou arquivos de dados como commits. O instalador Windows local é produzido com NSIS a partir do runtime Windows oficial e Chromium Windows. A compilação é real, mas foi feita em Linux: o teste de instalação/abertura/desinstalação em Windows ainda é obrigatório antes de marcar como estável. O workflow Windows gera também o aplicativo PyInstaller e instalador Inno Setup em Windows nativo. Nunca publique um arquivo Linux renomeado para `.exe`.
@@ -35,4 +35,4 @@ Windows portátil em Linux: `packaging/build_portable.py --compiler /caminho/pyt
 
 Linux: `packaging/build_linux.py --runtime /pasta/cpython-3.14.10-linux-x86_64-gnu --site /venv314/lib/python3.14/site-packages --browsers /pasta/playwright-linux`. Use runtime portátil confiável e dependências da lock; não copie uma instalação Python que dependa de caminhos absolutos da sua máquina.
 
-Depois de validar os artefatos, crie uma release inicialmente como **pré-lançamento**, com os limites documentados em AUTOMATICO-0.5.0.md, e anexe os arquivos e hashes. Marque quais testes foram realizados; não descreva os conectores experimentais como compatibilidade universal.
+Depois de validar os artefatos, crie uma release inicialmente como **pré-lançamento**, com os limites documentados em ATUALIZACAO-0.6.0.md, e anexe os arquivos e hashes. Marque quais testes foram realizados; não descreva os conectores experimentais como compatibilidade universal.

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { RefreshCw, ExternalLink } from "lucide-react";
+import { ActionFeedback, type Action, type Feedback } from "./ActionFeedback";
 import { api } from "./api";
 import type { AIModel, AIProvider, Settings } from "./types";
 
@@ -7,19 +8,29 @@ type Props = {
   settings: Settings;
   update: (values: Partial<Settings>) => void;
   save: () => Promise<unknown>;
-  act: (task: () => Promise<unknown>, message?: string) => Promise<void>;
+  act: Action;
   busy: boolean;
+  onTested?: () => void;
 };
 const normalized = (url: string) =>
   url.replace(/\/+$/, "").replace("127.0.0.1", "localhost");
 
-export function AISettings({ settings: s, update, save, act, busy }: Props) {
+export function AISettings({
+  settings: s,
+  update,
+  save,
+  act,
+  busy,
+  onTested,
+}: Props) {
   const [providers, setProviders] = useState<AIProvider[]>([]);
   const [providerId, setProviderId] = useState("");
   const [catalog, setCatalog] = useState<AIModel[] | null>(null);
   const [manual, setManual] = useState(false);
   const [search, setSearch] = useState("");
   const [problem, setProblem] = useState("");
+  const [modelsFeedback, setModelsFeedback] = useState<Feedback | null>(null);
+  const [testFeedback, setTestFeedback] = useState<Feedback | null>(null);
   useEffect(() => {
     let active = true;
     api<{ providers: AIProvider[] }>("/ai/providers")
@@ -60,6 +71,8 @@ export function AISettings({ settings: s, update, save, act, busy }: Props) {
     setCatalog(null);
     setSearch("");
     setProblem("");
+    setModelsFeedback(null);
+    setTestFeedback(null);
     setManual(false);
     update({
       ai_url: selected?.url || s.ai_url,
@@ -70,15 +83,19 @@ export function AISettings({ settings: s, update, save, act, busy }: Props) {
     });
   };
   const loadModels = () =>
-    act(async () => {
-      setCatalog(null);
-      setSearch("");
-      const result = await api<{ models: AIModel[] }>("/ai/models", "POST", {
-        ai_url: s.ai_url,
-        ai_key: s.ai_key,
-      });
-      setCatalog(result.models);
-    }, "Lista de modelos carregada. Escolha o modelo e teste a conexão.");
+    act(
+      async () => {
+        setCatalog(null);
+        setSearch("");
+        const result = await api<{ models: AIModel[] }>("/ai/models", "POST", {
+          ai_url: s.ai_url,
+          ai_key: s.ai_key,
+        });
+        setCatalog(result.models);
+      },
+      "Lista de modelos carregada. Escolha o modelo e teste a conexão.",
+      setModelsFeedback,
+    );
   return (
     <>
       <div className="panel-heading">
@@ -224,6 +241,7 @@ export function AISettings({ settings: s, update, save, act, busy }: Props) {
               limite de análises.
             </small>
           </div>
+          <ActionFeedback feedback={modelsFeedback} />
           {!manual && (
             <>
               {catalog && catalog.length > 15 && (
@@ -345,15 +363,21 @@ export function AISettings({ settings: s, update, save, act, busy }: Props) {
                 busy || !s.ai_model || !s.ai_consent || (!manual && missing)
               }
               onClick={() =>
-                act(async () => {
-                  await save();
-                  await api("/ai/test", "POST");
-                }, "Conexão e resposta JSON validadas.")
+                act(
+                  async () => {
+                    await save();
+                    await api("/ai/test", "POST");
+                    onTested?.();
+                  },
+                  "Conexão e resposta JSON validadas.",
+                  setTestFeedback,
+                )
               }
             >
               <RefreshCw size={16} />
               Salvar e testar conexão
             </button>
+            <ActionFeedback feedback={testFeedback} />
           </div>
         </>
       )}

@@ -1628,3 +1628,47 @@ footer {
   max-height: 600px;
   overflow: auto;
 }
+
+/* Keep every navigation item reachable on short displays. */
+:root {
+  scrollbar-width: thin;
+  scrollbar-color: #a7bbbf transparent;
+}
+.sidebar {
+  height: 100dvh;
+  overflow-y: auto;
+  scrollbar-width: none;
+  overscroll-behavior-y: contain;
+}
+.sidebar > * {
+  flex-shrink: 0;
+}
+@media (max-width: 850px) {
+  .sidebar {
+    position: sticky;
+    top: 0;
+  }
+}
+.workspace,
+.settings-layout > *,
+.content-grid > * {
+  min-width: 0;
+}
+.action-feedback {
+  margin: 8px 0 0;
+  font-size: 0.88rem;
+  overflow-wrap: anywhere;
+}
+.action-feedback.success {
+  color: #176553;
+}
+.action-feedback.error {
+  color: #a1323a;
+  padding: 9px 12px;
+  background: #fff2f2;
+  border-radius: 7px;
+}
+.button-row > .action-feedback {
+  flex-basis: 100%;
+  margin-top: 0;
+}

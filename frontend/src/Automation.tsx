@@ -1,13 +1,15 @@
 import { useState } from "react";
 import { Play, Pause, CheckCircle2, TriangleAlert } from "lucide-react";
+import { ActionFeedback, type Action, type Feedback } from "./ActionFeedback";
 import { api } from "./api";
 import { editableSettings } from "./types";
 import type { AppState, Settings } from "./types";
 type Props = {
   state: AppState;
-  act: (task: () => Promise<unknown>, message?: string) => Promise<void>;
+  act: Action;
   busy: boolean;
   go: (page: string) => void;
+  setup?: boolean;
 };
 const format = (date: string) => new Date(date).toLocaleString("pt-BR");
 
@@ -51,6 +53,7 @@ export function RunSummary({ state }: { state: AppState }) {
         {[
           ["Encontradas", run.found ?? "—"],
           ["Aderentes", run.eligible ?? "—"],
+          ["Fora do filtro de data", run.skipped_age || 0],
           ["Concluídas pelo conector", run.sent],
           ["Consolidadas sem envio", run.consolidated ?? 0],
           ["Pendências", run.pending ?? "—"],
@@ -76,8 +79,9 @@ export function RunSummary({ state }: { state: AppState }) {
     </section>
   );
 }
-export function AutomationPanel({ state, act, busy, go }: Props) {
+export function AutomationPanel({ state, act, busy, go, setup }: Props) {
   const [s, setS] = useState(state.settings);
+  const [saveFeedback, setSaveFeedback] = useState<Feedback | null>(null);
   const change = (key: keyof Settings, value: unknown) =>
     setS((x) => ({ ...x, [key]: value }));
   const toggle = (
@@ -103,40 +107,45 @@ export function AutomationPanel({ state, act, busy, go }: Props) {
   ] as const;
   return (
     <>
-      <RunSummary state={state} />
-      <section className="panel">
-        <div className="panel-heading">
-          <div>
-            <h2>Seu histórico nos últimos {metrics.days} dias</h2>
-            <p>
-              Candidaturas registradas nesse período e a etapa atual de cada
-              uma.
-            </p>
-          </div>
-        </div>
-        <div className="stats-grid">
-          {[
-            ["Candidaturas", metrics.applied],
-            ["Com retorno", metrics.responses],
-            ["Em teste técnico", metrics.current.technical || 0],
-            ["Com gestor", metrics.current.manager_interview || 0],
-          ].map(([label, value]) => (
-            <div className="stat" key={label}>
-              <div>{label}</div>
-              <strong>{value}</strong>
+      {!setup && (
+        <>
+          <RunSummary state={state} />
+          <section className="panel">
+            <div className="panel-heading">
+              <div>
+                <h2>Seu histórico nos últimos {metrics.days} dias</h2>
+                <p>
+                  Candidaturas registradas nesse período e a etapa atual de cada
+                  uma.
+                </p>
+              </div>
             </div>
-          ))}
-        </div>
-        <p>
-          <small>
-            {metrics.browser_confirmed || 0} confirmadas por portal ·{" "}
-            {metrics.smtp_accepted} com aceite SMTP · {metrics.reported_manual}{" "}
-            envios informados manualmente · {metrics.current.interview || 0} em
-            entrevista · {metrics.pending} pendências atuais. Estes números não
-            representam submissões automáticas em LinkedIn, Gupy ou Indeed.
-          </small>
-        </p>
-      </section>
+            <div className="stats-grid">
+              {[
+                ["Candidaturas", metrics.applied],
+                ["Com retorno", metrics.responses],
+                ["Em teste técnico", metrics.current.technical || 0],
+                ["Com gestor", metrics.current.manager_interview || 0],
+              ].map(([label, value]) => (
+                <div className="stat" key={label}>
+                  <div>{label}</div>
+                  <strong>{value}</strong>
+                </div>
+              ))}
+            </div>
+            <p>
+              <small>
+                {metrics.browser_confirmed || 0} confirmadas por portal ·{" "}
+                {metrics.smtp_accepted} com aceite SMTP ·{" "}
+                {metrics.reported_manual} envios informados manualmente ·{" "}
+                {metrics.current.interview || 0} em entrevista ·{" "}
+                {metrics.pending} pendências atuais. Estes números não
+                representam submissões automáticas em LinkedIn, Gupy ou Indeed.
+              </small>
+            </p>
+          </section>
+        </>
+      )}
       <div className="content-grid">
         <form
           className="panel"
@@ -145,6 +154,7 @@ export function AutomationPanel({ state, act, busy, go }: Props) {
             act(
               () => api("/settings", "PUT", editableSettings(s)),
               "Preferências de automação salvas.",
+              setSaveFeedback,
             );
           }}
         >
@@ -201,6 +211,33 @@ export function AutomationPanel({ state, act, busy, go }: Props) {
               type="checkbox"
               checked={s.auto_classify_areas}
               onChange={(e) => change("auto_classify_areas", e.target.checked)}
+            />
+          </label>
+          <label className="field">
+            <span>Idade máxima da publicação</span>
+            <select
+              value={s.max_job_age_days}
+              onChange={(e) =>
+                change("max_job_age_days", Number(e.target.value))
+              }
+            >
+              <option value={7}>Últimos 7 dias</option>
+              <option value={15}>Últimos 15 dias</option>
+              <option value={30}>Últimos 30 dias</option>
+            </select>
+          </label>
+          <label className="toggle-row">
+            <span>
+              <strong>Incluir vagas sem data de publicação</strong>
+              <small>
+                Desmarque para poupar chamadas à IA quando a fonte não informa a
+                data.
+              </small>
+            </span>
+            <input
+              type="checkbox"
+              checked={s.include_undated_jobs}
+              onChange={(e) => change("include_undated_jobs", e.target.checked)}
             />
           </label>
           <h3>Termos da busca nos portais</h3>
@@ -283,11 +320,22 @@ export function AutomationPanel({ state, act, busy, go }: Props) {
           </p>
           <label className="toggle-row">
             <span>
-              <strong>Autorizar o compartilhamento com empresas nos portais de destino habilitados</strong>
-              <small>Permite preencher dados pessoais e anexar o currículo para essas empresas. Uma recusa salva para um domínio continua valendo.</small>
+              <strong>
+                Autorizar o compartilhamento com empresas nos portais de destino
+                habilitados
+              </strong>
+              <small>
+                Permite preencher dados pessoais e anexar o currículo para essas
+                empresas. Uma recusa salva para um domínio continua valendo.
+              </small>
             </span>
-            <input type="checkbox" checked={s.share_with_enabled_portals}
-              onChange={(e) => change("share_with_enabled_portals", e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={s.share_with_enabled_portals}
+              onChange={(e) =>
+                change("share_with_enabled_portals", e.target.checked)
+              }
+            />
           </label>
           {state.connectors
             .filter((c) => c.id !== "feed")
@@ -313,6 +361,7 @@ export function AutomationPanel({ state, act, busy, go }: Props) {
           <button className="primary" disabled={busy}>
             Salvar preferências
           </button>
+          <ActionFeedback feedback={saveFeedback} />
         </form>
         <section className="panel aside-note">
           <h2>Preparação da rotina</h2>

@@ -11,34 +11,49 @@ from playwright.async_api import TimeoutError as BrowserTimeout
 from .ai import AI
 from .matching import exact_quote, normalized
 from .models import JobInput
-from .sources import application_identity
+from .sources import application_identity, walk_json
+from .job_dates import date_string, visible_job_date
 
 
 def posting_country(scripts):
     countries = set()
+    for item in structured_postings(scripts):
+        locations = item.get("jobLocation", [])
+        for location in locations if isinstance(locations, list) else [locations]:
+            address = location.get("address") if isinstance(location, dict) else None
+            country = (
+                address.get("addressCountry") if isinstance(address, dict) else None
+            )
+            if isinstance(country, str) and country.strip():
+                countries.add(
+                    "BR"
+                    if normalized(country) in ("br", "brasil", "brazil")
+                    else "unknown"
+                )
+    return countries.pop() if len(countries) == 1 else "unknown" if countries else ""
+
+
+def structured_postings(scripts):
     for script in scripts:
         try:
             data = json.loads(html.unescape(script))
         except ValueError:
             continue
-        for item in data if isinstance(data, list) else [data]:
-            if not isinstance(item, dict) or item.get("@type") != "JobPosting":
-                continue
-            locations = item.get("jobLocation", [])
-            for location in locations if isinstance(locations, list) else [locations]:
-                address = (
-                    location.get("address") if isinstance(location, dict) else None
-                )
-                country = (
-                    address.get("addressCountry") if isinstance(address, dict) else None
-                )
-                if isinstance(country, str) and country.strip():
-                    countries.add(
-                        "BR"
-                        if normalized(country) in ("br", "brasil", "brazil")
-                        else "unknown"
-                    )
-    return countries.pop() if len(countries) == 1 else "unknown" if countries else ""
+        yield from walk_json(data)
+
+
+def structured_dates(scripts, data):
+    postings = list(structured_postings(scripts))
+    return {
+        "published_at": next(
+            (day for p in postings if (day := date_string(p.get("datePosted")))), ""
+        )
+        or date_string(data.get("datetime"))
+        or visible_job_date(data["text"]),
+        "valid_until": next(
+            (day for p in postings if (day := date_string(p.get("validThrough")))), ""
+        ),
+    }
 
 
 async def collect(page, platform, query, limit, posts=True, source_url=None):
@@ -118,7 +133,7 @@ async def collect(page, platform, query, limit, posts=True, source_url=None):
                 if await more.count() == 1:
                     await more.click()
                 data = await card.evaluate(
-                    """e => ({text:e.innerText, urn:e.getAttribute('data-urn') || '', links:Array.from(e.querySelectorAll('a[href]')).map(a=>({url:a.href,label:a.innerText}))})"""
+                    """e => ({text:e.innerText, datetime:e.querySelector('time[datetime]')?.getAttribute('datetime') || '', urn:e.getAttribute('data-urn') || '', links:Array.from(e.querySelectorAll('a[href]')).map(a=>({url:a.href,label:a.innerText}))})"""
                 )
                 if not re.search(
                     r"\b(vaga|contratando|oportunidade|hiring|curr[ií]culo)\b",
@@ -143,6 +158,8 @@ async def collect(page, platform, query, limit, posts=True, source_url=None):
                             "text": data["text"][:40000],
                             "links": data["links"][:80],
                             "kind": "post",
+                            "published_at": date_string(data.get("datetime"))
+                            or visible_job_date(data["text"]),
                             "platform": platform,
                         }
                     )
@@ -187,7 +204,7 @@ async def collect(page, platform, query, limit, posts=True, source_url=None):
                     "A sessão expirou ou o portal exige login. Reabra o navegador interno."
                 )
             data = await page.evaluate(
-                """() => { const e=document.querySelector('.jobs-details__main-content, .jobsearch-JobComponent, main'); return e ? {text:e.innerText, links:Array.from(e.querySelectorAll('a[href]')).map(a=>({url:a.href,label:a.innerText}))} : {text:'',links:[]}; }"""
+                """() => { const e=document.querySelector('.jobs-details__main-content, .jobsearch-JobComponent, main'); return e ? {text:e.innerText, datetime:e.querySelector('time[datetime]')?.getAttribute('datetime') || '', links:Array.from(e.querySelectorAll('a[href]')).map(a=>({url:a.href,label:a.innerText}))} : {text:'',links:[]}; }"""
             )
             structured = await page.locator(
                 'script[type="application/ld+json"]'
@@ -201,6 +218,7 @@ async def collect(page, platform, query, limit, posts=True, source_url=None):
                         "text": data["text"][:40000],
                         "links": data["links"][:80],
                         "kind": "job",
+                        **structured_dates(structured, data),
                         "country": posting_country(structured),
                         "platform": platform,
                     }
@@ -274,6 +292,8 @@ def extract_record(store, settings, raw):
     job = JobInput(
         **fields,
         country=raw.get("country") or country,
+        published_at=raw.get("published_at", ""),
+        valid_until=raw.get("valid_until", ""),
         url=raw["url"],
         application_url=application_url,
         description=raw["text"],

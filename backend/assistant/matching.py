@@ -30,7 +30,13 @@ def exact_quote(quote, text):
 
 def fingerprint(profile, job, settings):
     payload = {
-        "profile": profile,
+        "profile": {
+            **profile,
+            "facts": [
+                {k: v for k, v in fact.items() if k != "category" or v != "other"}
+                for fact in profile.get("facts", [])
+            ],
+        },
         "job": {
             k: job.get(k)
             for k in [

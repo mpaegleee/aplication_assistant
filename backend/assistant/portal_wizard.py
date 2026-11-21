@@ -169,7 +169,9 @@ async def fill_wizard(page, platform, profile, pdf, submit=False, before_submit=
             if not f["visible"]:
                 continue
             question = f["group"] or f["label"]
-            answer = answer_for(question, profile)
+            answer = answer_for(
+                question, profile, allow_summary=f["type"] == "textarea"
+            )
             if f["type"] == "radio":
                 if re.search(
                     r"\.(pdf|docx?)(?:\b|$)", f["label"], re.IGNORECASE

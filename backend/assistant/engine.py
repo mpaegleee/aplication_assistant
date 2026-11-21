@@ -16,6 +16,7 @@ from .documents import resume_pdf
 from .mail import email_eligible, build_email, smtp_send, prepare_delivery
 from .connectors import CONNECTORS, platform_for, source_platform, source_address
 from .history import record_stage
+from .job_dates import outside_window
 
 TERMINAL = {
     "sent",
@@ -111,6 +112,11 @@ class Engine:
                 for item in j["origins"]:
                     if item not in origins:
                         origins.append(item)
+                for field in ("published_at", "valid_until"):
+                    if data.get(field):
+                        existing[field] = data[field]
+                    elif existing.get(field):
+                        data[field] = existing[field]
                 if (
                     existing["status"] not in TERMINAL
                     and existing["description"] != data["description"]
@@ -246,6 +252,12 @@ class Engine:
                     "Já existe candidatura enviada, encerrada ou incerta para esse destino. Confira o histórico antes de continuar."
                 )
             p, s, a = self.valid_analysis(j)
+            if automatic and (
+                reason := self.age_check(
+                    j, s, require_date=j.get("source") not in ("manual", None)
+                )
+            ):
+                raise ValueError(reason)
             if automatic and s["mode"] == "manual":
                 raise ValueError("Modo manual: envio automático cancelado.")
             if s["paused"]:
@@ -315,6 +327,14 @@ class Engine:
                     "Candidatura já tentada ou concluída. Confira o histórico."
                 )
             profile, settings, analysis = self.valid_analysis(job)
+            if automatic and (
+                reason := self.age_check(
+                    job,
+                    settings,
+                    require_date=job.get("source") not in ("manual", None),
+                )
+            ):
+                raise ValueError(reason)
             if automatic and settings["mode"] == "manual":
                 raise ValueError("Modo manual: envio automático cancelado.")
             if settings["paused"]:
@@ -369,6 +389,14 @@ class Engine:
                 current = self.store.get("jobs", id)
                 self.valid_analysis(current)
                 config = self.settings()
+                if automatic and (
+                    reason := self.age_check(
+                        current,
+                        config,
+                        require_date=current.get("source") not in ("manual", None),
+                    )
+                ):
+                    raise ValueError(reason)
                 if (
                     (automatic and config["mode"] == "manual")
                     or (
@@ -490,7 +518,7 @@ class Engine:
         with self.lock:
             if self.running:
                 raise ValueError("Já existe uma execução em andamento.")
-            if self.settings()["paused"]:
+            if action != "collect" and self.settings()["paused"]:
                 raise ValueError("Retome a rotina nas configurações.")
             self.running = True
         self.thread = threading.Thread(target=self.run, args=(action,), daemon=True)
@@ -503,14 +531,19 @@ class Engine:
         self.store.put("jobs", job, job["id"])
         return code
 
-    def process(self, job, collect_only=False):
+    def process(self, job, collect_only=False, *, manual_collection=False):
         settings = self.settings()
         if job["status"] in TERMINAL or job["status"] == "sending":
             return "already_submitted"
         if job.get("archived"):
             return "archived"
-        if settings["paused"] or self.stop.is_set():
+        if (settings["paused"] and not manual_collection) or self.stop.is_set():
             return "paused"
+        reason = self.age_check(
+            job, settings, require_date=job.get("source") not in ("manual", None)
+        )
+        if reason:
+            return self.pending(job, "outside_window", reason)
         job = self.analyze(job["id"])
         if job["status"] == "blocked":
             return self.pending(job, "blocked", " ".join(job["analysis"]["blocks"]))
@@ -521,7 +554,7 @@ class Engine:
                 "Aderência ou confiança abaixo do limite configurado.",
             )
         settings = self.settings()
-        if collect_only or settings["mode"] == "manual":
+        if manual_collection or collect_only or settings["mode"] == "manual":
             return self.pending(
                 job,
                 "manual_ready",
@@ -581,6 +614,10 @@ class Engine:
         self.send(job["id"], automatic=True)
         return "sent"
 
+    def age_check(self, data, settings, *, require_date=False):
+        today = datetime.now(ZoneInfo(settings["timezone"])).date()
+        return outside_window(data, settings, today, require_date=require_date)
+
     def portal_records(self, settings, platform, query="", source_url=None):
         if not self.browser:
             raise ValueError("Navegador interno indisponível.")
@@ -609,6 +646,9 @@ class Engine:
                 break
             entry["found"] += 1
             run["found"] += 1
+            if self.age_check(raw, settings, require_date=True):
+                run["skipped_age"] = run.get("skipped_age", 0) + 1
+                continue
             try:
                 data = extract_record(self.store, settings, raw)
                 if not data:
@@ -631,7 +671,8 @@ class Engine:
                 run["errors"].append("Publicação/vaga pendente: " + str(exc)[:350])
 
     def run(self, action="apply"):
-        collect_only = action == "collect" or self.settings()["mode"] == "manual"
+        manual_collection = action == "collect"
+        collect_only = manual_collection or self.settings()["mode"] == "manual"
         run = {
             "id": secrets.token_hex(12),
             "started_at": now(),
@@ -639,6 +680,7 @@ class Engine:
             "status": "running",
             "consolidated": 0,
             "found": 0,
+            "skipped_age": 0,
             "imported": 0,
             "duplicates": 0,
             "analyzed": 0,
@@ -656,7 +698,7 @@ class Engine:
         def interrupted():
             return (
                 self.stop.is_set()
-                or self.settings()["paused"]
+                or (self.settings()["paused"] and not manual_collection)
                 or time.monotonic() - started >= limit
             )
 
@@ -746,6 +788,9 @@ class Engine:
                             break
                         entry["found"] += 1
                         run["found"] += 1
+                        if self.age_check(data, settings, require_date=True):
+                            run["skipped_age"] += 1
+                            continue
                         job, created = self.add_job(
                             data,
                             {
@@ -784,6 +829,16 @@ class Engine:
                     o["platform"] in settings["search_platforms"] for o in origins
                 ):
                     continue
+                reason = self.age_check(
+                    job,
+                    settings,
+                    require_date=job.get("source") not in ("manual", None),
+                )
+                if reason:
+                    # Imported jobs remain available for review and keep their history.
+                    if job.get("pending_code") != "outside_window":
+                        self.pending(job, "outside_window", reason)
+                    continue
                 jobs.append(job)
             jobs.sort(key=lambda j: j.get("last_processed_at", ""))
             jobs = jobs[: settings["max_jobs_per_run"]]
@@ -799,7 +854,11 @@ class Engine:
                 run["items"].append(item)
                 self.store.put("runs", run, run["id"])
                 try:
-                    result = self.process(job, collect_only=collect_only)
+                    result = self.process(
+                        job,
+                        collect_only=collect_only,
+                        manual_collection=manual_collection,
+                    )
                     run["consolidated"] += int(result == "manual_ready")
                     latest = self.require_job(job["id"])
                     run["sent"] += int(result == "sent")
@@ -852,7 +911,8 @@ class Engine:
                     break
             run["status"] = (
                 "paused"
-                if self.settings()["paused"] or self.stop.is_set()
+                if (self.settings()["paused"] and not manual_collection)
+                or self.stop.is_set()
                 else "time_limit"
                 if time.monotonic() - started >= limit
                 else "completed"

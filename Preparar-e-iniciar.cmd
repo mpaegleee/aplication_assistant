@@ -1,7 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-if not exist ".venv\aa-ready-0.5.0.txt" (
+if not exist ".venv\aa-ready-0.6.0.txt" (
   where py >nul 2>nul
   if errorlevel 1 (
     echo Instale Python 3.12 x64 pelo site https://www.python.org/downloads/windows/
@@ -13,7 +13,7 @@ if not exist ".venv\aa-ready-0.5.0.txt" (
   if errorlevel 1 goto erro
   .venv\Scripts\python.exe -m pip install --require-hashes -r backend\requirements.lock
   if errorlevel 1 goto erro
-  echo ready> .venv\aa-ready-0.5.0.txt
+  echo ready> .venv\aa-ready-0.6.0.txt
 )
 if not exist "frontend\dist\index.html" (
   where npm >nul 2>nul

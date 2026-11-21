@@ -1,5 +1,9 @@
 """Current, factual eligibility projection shared by manual and scheduled workflows."""
 
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+from .job_dates import outside_window
 from .connectors import CONNECTORS, platform_for
 from .engine import TERMINAL
 from .mail import email_eligible
@@ -17,13 +21,20 @@ def worklist(profile, settings, jobs):
         "blocked": 0,
         "below_threshold": 0,
         "archived": 0,
+        "outside_window": 0,
     }
+    today = datetime.now(ZoneInfo(settings["timezone"])).date()
     capabilities = {c["id"]: c for c in CONNECTORS}
     for job in jobs:
         if job.get("archived"):
             summary["archived"] += 1
             continue
         if job["status"] in TERMINAL or job["status"] == "sending":
+            continue
+        if outside_window(
+            job, settings, today, require_date=job.get("source") not in ("manual", None)
+        ):
+            summary["outside_window"] += 1
             continue
         a = job.get("analysis") or {}
         if hard_blocks(profile, job) or a.get("blocks"):

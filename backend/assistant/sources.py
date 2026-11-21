@@ -6,6 +6,7 @@ from html.parser import HTMLParser
 from defusedxml import ElementTree
 from .models import JobInput
 from .matching import infer_area, normalized
+from .job_dates import date_string
 
 MAX_BYTES = 2_000_000
 
@@ -162,6 +163,8 @@ def posting(raw, url):
         modality="Remoto"
         if raw.get("jobLocationType") == "TELECOMMUTE"
         else "Não informado",
+        published_at=date_string(raw.get("datePosted")),
+        valid_until=date_string(raw.get("validThrough")),
         source="JobPosting",
         country="BR" if country else "unknown",
     ).model_dump()
@@ -178,6 +181,13 @@ def read_source(text, url):
                     "unknown",
                 ]:
                     continue
+                item = dict(item)
+                item["published_at"] = date_string(
+                    item.pop("datePosted", item.get("published_at"))
+                )
+                item["valid_until"] = date_string(
+                    item.pop("validThrough", item.get("valid_until"))
+                )
                 try:
                     jobs.append(
                         JobInput.model_validate(
@@ -225,6 +235,7 @@ def read_source(text, url):
                 description=description,
                 area=infer_area(title),
                 source="RSS",
+                published_at=date_string(node.findtext("pubDate")),
                 country="unknown",
             ).model_dump()
         )
@@ -292,6 +303,11 @@ def read_board(text, source):
                 location=location,
                 modality=modality,
                 source=kind,
+                published_at=date_string(
+                    row.get("first_published")
+                    if kind == "greenhouse"
+                    else row.get("createdAt")
+                ),
                 country="BR"
                 if re.search(
                     r"\b(brasil|brazil|sao paulo|rio de janeiro|brasilia|belo horizonte|curitiba|porto alegre|recife|florianopolis|fortaleza|salvador|manaus|vitoria|goiania|campinas)\b",

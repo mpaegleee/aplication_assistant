@@ -2,7 +2,7 @@ Unicode true
 !include "MUI2.nsh"
 !include "x64.nsh"
 !include "WinVer.nsh"
-!define VERSION "0.5.0"
+!define VERSION "0.6.0"
 Name "Application Assistant"
 OutFile "../dist/ApplicationAssistant-Setup-${VERSION}-Windows-x64.exe"
 InstallDir "$LOCALAPPDATA\Programs\Application Assistant"

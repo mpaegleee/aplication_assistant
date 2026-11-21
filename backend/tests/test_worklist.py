@@ -325,3 +325,75 @@ def test_late_schedule_starts_once_even_after_busy_tick(app, settings, monkeypat
     engine.scheduler()
     assert start.call_count == 2
     assert app.state.store.get("schedule")["last"].startswith("2026-11-23 09:00")
+
+
+def test_collect_now_works_while_paused_without_sending(
+    app, client, profile, settings, job, analysis, monkeypatch
+):
+    settings.update(paused=True, mode="automatic")
+    key = install(app, profile, settings, job, analysis, monkeypatch)
+    engine = app.state.engine
+    monkeypatch.setattr(
+        "assistant.engine.smtp_send", lambda *a: pytest.fail("Unexpected send")
+    )
+    assert client.post("/api/runs", json={"action": "apply"}).status_code == 400
+    response = client.post("/api/runs", json={"action": "collect"})
+    assert response.status_code == 200
+    engine.thread.join(timeout=5)
+    run = app.state.store.all("runs")[0]
+    assert run["status"] == "completed"
+    assert run["consolidated"] == 1 and run["sent"] == 0
+    assert engine.require_job(key)["pending_code"] == "manual_ready"
+    assert engine.settings()["paused"]
+
+
+def test_stale_and_expired_records_are_skipped_before_ai(app, settings, monkeypatch):
+    from datetime import date, timedelta
+
+    engine = app.state.engine
+    today = date.today()
+    spec = {**settings, "max_job_age_days": 7, "include_undated_jobs": False}
+    monkeypatch.setattr(
+        "assistant.portal_discovery.extract_record",
+        lambda *a: pytest.fail("Paid extraction of filtered vacancy"),
+    )
+    run = {"found": 0, "errors": []}
+    entry = {"found": 0}
+    engine.import_portal_records(
+        [
+            {"published_at": (today - timedelta(days=90)).isoformat()},
+            {
+                "published_at": today.isoformat(),
+                "valid_until": (today - timedelta(days=2)).isoformat(),
+            },
+            {},
+        ],
+        spec,
+        run,
+        entry,
+        set(),
+        lambda: False,
+    )
+    assert run["found"] == run["skipped_age"] == 3
+
+
+def test_public_job_dates_can_be_parsed_without_ai():
+    from assistant.portal_discovery import structured_dates
+    from assistant.sources import read_source
+
+    data = structured_dates(
+        [
+            '{"@type":"JobPosting","datePosted":"2026-10-01","validThrough":"2026-10-31"}'
+        ],
+        {"text": "Publicado em 01 de outubro de 2026"},
+    )
+    assert data == {"published_at": "2026-10-01", "valid_until": "2026-10-31"}
+    rss = """<rss><channel><item><title>Desenvolvedor Python</title>
+      <link>https://empresa.example.com/jobs/p</link>
+      <description>Vaga de desenvolvimento de software.</description>
+      <pubDate>Thu, 01 Oct 2026 12:00:00 GMT</pubDate>
+      </item></channel></rss>"""
+    assert (
+        read_source(rss, "https://empresa.example.com/feed")[0]["published_at"]
+        == "2026-10-01"
+    )

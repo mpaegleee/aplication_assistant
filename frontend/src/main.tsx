@@ -30,15 +30,17 @@ import {
   Link2,
   Inbox,
 } from "lucide-react";
+import { ActionFeedback, type Action, type Feedback } from "./ActionFeedback";
 import { api } from "./api";
 import { Worklist } from "./Worklist";
 import { BrowserPage } from "./BrowserPage";
 import { AISettings } from "./AISettings";
 import { AutomationPanel, RunSummary } from "./Automation";
-import { editableJob, editableSettings } from "./types";
+import { editableJob, editableSettings, factCategories } from "./types";
 import type {
   AppState,
   Profile,
+  FactCategory,
   Settings,
   Job,
   JobInput,
@@ -214,6 +216,9 @@ function App() {
     [busy, setBusy] = useState(false),
     [password, setPassword] = useState(""),
     [setupToken, setSetupToken] = useState("");
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [page]);
   const refresh = useCallback(async () => {
     setState(
       await api<AppState>("/state").then((next) => {
@@ -232,16 +237,21 @@ function App() {
   async function act(
     task: () => Promise<unknown>,
     message = "Alterações salvas.",
+    report?: (feedback: Feedback) => void,
   ) {
     setBusy(true);
     setError("");
+    report?.({ kind: "pending", message: "Aguarde…" });
     try {
       await task();
       const current = await api<{ authenticated: boolean }>("/session");
       if (current.authenticated) await refresh();
-      notify(message);
+      if (report) report({ kind: "success", message });
+      else notify(message);
     } catch (e) {
-      setError((e as Error).message);
+      const message = (e as Error).message;
+      if (report) report({ kind: "error", message });
+      else setError(message);
     } finally {
       setBusy(false);
     }
@@ -274,6 +284,7 @@ function App() {
         setup_token: setupToken,
       });
       setPassword("");
+      if (!session?.configured) setPage("setup");
       setSession(await api("/session"));
     } catch (e) {
       setError((e as Error).message);
@@ -374,6 +385,7 @@ function App() {
     );
   const nav = [
     ["dashboard", "Visão geral", LayoutDashboard],
+    ["setup", "Configuração guiada", Settings2],
     ["autopilot", "Rotina automática", Play],
     ["profile", "Meu perfil", UserRound],
     ["worklist", "Vagas consolidadas", CheckCircle2],
@@ -387,6 +399,7 @@ function App() {
   ] as const;
   const titles: Record<string, string> = {
     dashboard: "Visão geral",
+    setup: "Configuração guiada",
     autopilot: "Rotina automática",
     profile: "Meu perfil",
     worklist: "Vagas consolidadas",
@@ -566,6 +579,15 @@ function App() {
               <Dashboard state={state} go={setPage} />
             </>
           )}
+          {page === "setup" && (
+            <SetupGuide
+              state={state}
+              act={act}
+              busy={busy}
+              refresh={refresh}
+              go={setPage}
+            />
+          )}
           {page === "autopilot" && (
             <AutomationPanel state={state} act={act} busy={busy} go={setPage} />
           )}
@@ -613,7 +635,7 @@ function App() {
         <footer>
           Application Assistant{" "}
           <span>Feito para tornar a busca por emprego mais humana.</span>
-          <span>v0.5.0 · teste local</span>
+          <span>v0.6.0 · teste local</span>
         </footer>
       </div>
       {toast && (
@@ -628,7 +650,7 @@ function App() {
 
 type Common = {
   state: AppState;
-  act: (task: () => Promise<unknown>, message?: string) => Promise<void>;
+  act: Action;
   busy: boolean;
 };
 function Dashboard({
@@ -875,16 +897,433 @@ function Dashboard({
     </>
   );
 }
+function SetupGuide({
+  state,
+  act,
+  busy,
+  refresh,
+  go,
+}: Common & {
+  refresh: () => Promise<unknown>;
+  go: (page: string) => void;
+}) {
+  const [step, setStep] = useState(0);
+  const [collectFeedback, setCollectFeedback] = useState<Feedback | null>(null);
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [step]);
+  const [editSources, setEditSources] = useState(false);
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [sourceFeedback, setSourceFeedback] = useState<Feedback | null>(null);
+  const [testedModel, setTestedModel] = useState("");
+  const [sessions, setSessions] = useState<
+    { id: string; saved_at?: string; controlled: boolean }[]
+  >([]);
+  const settings = state.settings;
+  const sources = state.configured_sources || [];
+  const portals = sources.filter(
+    (source) => source === "linkedin" || source === "indeed",
+  );
+  const missingSessions = portals.filter(
+    (portal) =>
+      !sessions.some(
+        (item) => item.id === portal && item.saved_at && !item.controlled,
+      ),
+  );
+  const model = `${settings.ai_url}|${settings.ai_model}`;
+  const steps = [
+    "Inteligência artificial",
+    "Currículo e perfil",
+    "Fontes e rotina",
+    "Sessões e envio",
+    "Teste de coleta",
+  ];
+  useEffect(() => {
+    if (step < 3) return;
+    let active = true;
+    const update = () =>
+      api<typeof sessions>("/browser")
+        .then((result) => {
+          if (active) setSessions(result);
+        })
+        .catch(() => {});
+    void update();
+    const timer = window.setInterval(update, 3000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [step]);
+  const canTest =
+    settings.ai_consent &&
+    !!settings.ai_model &&
+    state.profile.confirmed &&
+    sources.length > 0 &&
+    missingSessions.length === 0;
+  const disabledReasons = [
+    !settings.ai_consent || !settings.ai_model
+      ? "Configure e salve o modelo com consentimento."
+      : "",
+    !state.profile.confirmed
+      ? "Confirme e salve o perfil, com área, cargo e fatos."
+      : "",
+    !sources.length ? "Salve pelo menos uma fonte habilitada na rotina." : "",
+    missingSessions.length
+      ? `Entre e libere o controle em: ${missingSessions.join(", ")}.`
+      : "",
+  ].filter(Boolean);
+  async function addSource() {
+    const address = new URL(sourceUrl.trim());
+    if (
+      address.protocol !== "https:" ||
+      address.username ||
+      address.password ||
+      (address.port && address.port !== "443")
+    ) {
+      throw new Error(
+        "Informe um endereço HTTPS público, sem usuário, senha ou porta personalizada.",
+      );
+    }
+    const domain = address.hostname.toLowerCase();
+    if (!domain.includes("."))
+      throw new Error("Informe o endereço público da fonte.");
+    const gupy = domain === "gupy.io" || domain.endsWith(".gupy.io");
+    if (/(^|\.)(linkedin\.com|indeed\.com(?:\.br)?)$/.test(domain)) {
+      throw new Error(
+        "Escolha LinkedIn ou Indeed nos portais abaixo e entre pelo navegador interno.",
+      );
+    }
+    const url = address.href;
+    if (settings.sources.some((source) => source.url === url))
+      throw new Error(
+        "Este endereço já está cadastrado. Confira se a fonte está habilitada.",
+      );
+    const platform = gupy ? "gupy" : "company";
+    await api("/settings", "PUT", {
+      ...editableSettings(settings),
+      search_platforms: [...new Set([...settings.search_platforms, platform])],
+      allowed_domains: gupy
+        ? settings.allowed_domains
+        : [...new Set([...settings.allowed_domains, domain])],
+      sources: [
+        ...settings.sources,
+        { name: domain, url, kind: "company", enabled: true },
+      ],
+    });
+    setSourceUrl("");
+  }
+  return (
+    <>
+      <section className="panel">
+        <h2>
+          {step + 1} de {steps.length} · {steps[step]}
+        </h2>
+        <div className="chips" aria-label="Etapas da configuração">
+          {steps.map((label, index) => (
+            <button
+              type="button"
+              className={index === step ? "chip selected" : "chip"}
+              key={label}
+              disabled={busy}
+              aria-current={index === step ? "step" : undefined}
+              onClick={() => setStep(index)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </section>
+      {step === 0 && (
+        <SettingsPage
+          state={state}
+          act={act}
+          busy={busy}
+          section="ai"
+          onTested={() =>
+            void api<AppState>("/state")
+              .then(({ settings: saved }) =>
+                setTestedModel(`${saved.ai_url}|${saved.ai_model}`),
+              )
+              .catch(() => {})
+          }
+        />
+      )}
+      {step === 1 && <ProfilePage state={state} act={act} busy={busy} />}
+      {step === 2 && (
+        <>
+          <section className="panel">
+            <h3>Adicionar uma fonte por link</h3>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                act(
+                  addSource,
+                  "Fonte adicionada e habilitada para a coleta.",
+                  setSourceFeedback,
+                );
+              }}
+            >
+              <Field
+                label="Link do feed ou da página de carreiras"
+                hint="Aceita feeds RSS/JSON e páginas públicas de vagas da Gupy ou com dados JobPosting. A inclusão autoriza a consulta desse endereço."
+              >
+                <input
+                  type="url"
+                  required
+                  value={sourceUrl}
+                  onChange={(event) => setSourceUrl(event.target.value)}
+                />
+              </Field>
+              <button className="secondary" disabled={busy}>
+                Adicionar pelo link
+              </button>
+              <ActionFeedback feedback={sourceFeedback} />
+            </form>
+            <p>
+              Para LinkedIn e Indeed, selecione os portais abaixo e salve as
+              preferências.
+            </p>
+          </section>
+          <section className="panel button-row">
+            <button
+              className={editSources ? "secondary" : "primary"}
+              disabled={busy}
+              onClick={() => setEditSources(false)}
+            >
+              Portais e modo de operação
+            </button>
+            <button
+              className={editSources ? "primary" : "secondary"}
+              disabled={busy}
+              onClick={() => setEditSources(true)}
+            >
+              Feeds e páginas de empresas
+            </button>
+          </section>
+          {editSources ? (
+            <SettingsPage
+              state={state}
+              act={act}
+              busy={busy}
+              section="sources"
+              key={settings.sources.length}
+            />
+          ) : (
+            <AutomationPanel
+              state={state}
+              act={act}
+              busy={busy}
+              go={go}
+              setup
+              key={settings.sources.length}
+            />
+          )}
+        </>
+      )}
+      {step === 3 && (
+        <>
+          {portals.length > 0 && (
+            <section className="panel">
+              <h3>Conectar portais de busca</h3>
+              <p>
+                Entre nos portais selecionados, salve a sessão e libere o
+                controle. A coleta de teste verifica se a sessão ainda funciona.
+              </p>
+              <BrowserPage
+                state={state}
+                refresh={refresh}
+                target={{ platform: portals[0], job_id: "" }}
+              />
+            </section>
+          )}
+          <details>
+            <summary>Configurar envio por e-mail, se for usar</summary>
+            <SettingsPage state={state} act={act} busy={busy} section="email" />
+          </details>
+        </>
+      )}
+      {step === 4 && (
+        <>
+          <section className="panel">
+            <h3>Verificar antes de ativar a agenda</h3>
+            {testedModel !== model &&
+              settings.ai_consent &&
+              settings.ai_model && (
+                <p>
+                  Use “Salvar e testar conexão” na primeira etapa se ainda não
+                  testou o modelo.
+                </p>
+              )}
+            {disabledReasons.length > 0 && (
+              <ul>
+                {disabledReasons.map((reason) => (
+                  <li key={reason}>{reason}</li>
+                ))}
+              </ul>
+            )}
+            <p>
+              O teste consulta as fontes e consolida a fila. Nenhuma candidatura
+              é enviada.
+            </p>
+            <div className="button-row">
+              <button
+                className="primary"
+                disabled={busy || state.running || !canTest}
+                onClick={() =>
+                  act(
+                    () => api("/runs", "POST", { action: "collect" }),
+                    "Coleta de teste iniciada.",
+                    setCollectFeedback,
+                  )
+                }
+              >
+                {state.running
+                  ? "Coleta em andamento"
+                  : "Testar coleta sem envio"}
+              </button>
+              <button className="secondary" onClick={() => go("worklist")}>
+                Ver vagas consolidadas
+              </button>
+              <ActionFeedback feedback={collectFeedback} />
+            </div>
+          </section>
+          <RunSummary state={state} />
+          <details>
+            <summary>Configurar agenda, se for usar</summary>
+            <SchedulePage state={state} act={act} busy={busy} />
+          </details>
+        </>
+      )}
+      <section className="panel button-row">
+        {step > 0 && (
+          <button
+            className="secondary"
+            disabled={busy}
+            onClick={() => setStep(step - 1)}
+          >
+            Voltar
+          </button>
+        )}
+        {step < steps.length - 1 && (
+          <button
+            className="primary"
+            disabled={busy}
+            onClick={() => setStep(step + 1)}
+          >
+            Próxima etapa
+          </button>
+        )}
+      </section>
+    </>
+  );
+}
+function ResumeVersions({ act, busy, state }: Common) {
+  const [focus, setFocus] = useState("");
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [versions, setVersions] = useState<
+    { id: string; focus: string; at: string }[]
+  >([]);
+  useEffect(() => {
+    let active = true;
+    api<typeof versions>("/profile/resume-versions")
+      .then((items) => {
+        if (active) setVersions(items);
+      })
+      .catch((error: Error) => {
+        if (active) setFeedback({ kind: "error", message: error.message });
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+  return (
+    <section className="panel">
+      <h2>Versões do currículo</h2>
+      <p>
+        Informe um foco como IA generativa e LLMs ou desenvolvimento Python. A
+        IA seleciona e ordena os fatos confirmados que mais ajudam nesse
+        objetivo.
+      </p>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          const value = focus.trim();
+          act(
+            async () => {
+              const version = await api<(typeof versions)[number]>(
+                "/profile/resume-versions",
+                "POST",
+                { focus: value },
+              );
+              setVersions((previous) => [version, ...previous].slice(0, 20));
+              setFocus("");
+            },
+            "Versão pronta para baixar.",
+            setFeedback,
+          );
+        }}
+      >
+        <Field label="Foco do currículo">
+          <input
+            value={focus}
+            onChange={(event) => setFocus(event.target.value)}
+            maxLength={150}
+            minLength={2}
+            required
+          />
+        </Field>
+        <button
+          className="primary"
+          disabled={busy || !state.profile.confirmed || focus.trim().length < 2}
+        >
+          Gerar versão com IA
+        </button>
+        <ActionFeedback feedback={feedback} />
+        {!state.profile.confirmed && (
+          <p>
+            <small>Confirme e salve o perfil para gerar uma versão.</small>
+          </p>
+        )}
+      </form>
+      {versions.map((version) => (
+        <div className="button-row" key={version.id}>
+          <strong>{version.focus}</strong>
+          <a
+            className="secondary"
+            href={`/api/profile/resume-versions/${version.id}`}
+            download
+          >
+            PDF
+          </a>
+          <a
+            className="secondary"
+            href={`/api/profile/resume-versions/${version.id}?format=docx`}
+            download
+          >
+            Word (.docx)
+          </a>
+        </div>
+      ))}
+    </section>
+  );
+}
 function ProfilePage({ state, act, busy }: Common) {
   const [p, setP] = useState<Profile>(state.profile),
     [text, setText] = useState(""),
+    [factFilter, setFactFilter] = useState<FactCategory | "all">("all"),
+    [showText, setShowText] = useState(false),
+    [contactFields, setContactFields] = useState<string[]>([]),
     [draftMessage, setDraftMessage] = useState(""),
+    [saveFeedback, setSaveFeedback] = useState<Feedback | null>(null),
+    [importFeedback, setImportFeedback] = useState<Feedback | null>(null),
     [rolesText, setRolesText] = useState(state.profile.roles.join(", ")),
     [locationsText, setLocationsText] = useState(
       state.profile.locations.join(", "),
     );
-  const patch = (key: keyof Profile, value: unknown) =>
+  const patch = (key: keyof Profile, value: unknown) => {
+    setSaveFeedback(null);
     setP((x) => ({ ...x, [key]: value, confirmed: false }));
+  };
   const choose = (
     key: "areas" | "excluded_areas" | "modalities" | "contracts",
     v: string,
@@ -904,6 +1343,16 @@ function ProfilePage({ state, act, busy }: Common) {
             </div>
             <FileText size={21} />
           </div>
+          {state.pdf_imported && (
+            <div className="notice">
+              <strong>Currículo importado</strong>
+              <div>
+                <a href="/api/profile/pdf" download>
+                  {state.pdf_filename || "Curriculo.pdf"}
+                </a>
+              </div>
+            </div>
+          )}
           <label className="upload-zone">
             <Upload size={27} />
             <strong>
@@ -921,19 +1370,59 @@ function ProfilePage({ state, act, busy }: Common) {
                 if (!f) return;
                 const data = new FormData();
                 data.append("file", f);
-                act(async () => {
-                  const r = await api<{ text: string }>(
-                    "/profile/pdf",
-                    "POST",
-                    data,
-                  );
-                  setText(r.text);
-                  setP((x) => ({ ...x, confirmed: false }));
-                }, "PDF importado. Revise o texto e extraia os fatos.");
+                act(
+                  async () => {
+                    const r = await api<{
+                      text: string;
+                      contacts: Partial<
+                        Record<
+                          "name" | "email" | "phone" | "city" | "linkedin_url",
+                          string
+                        >
+                      >;
+                    }>("/profile/pdf", "POST", data);
+                    const labels = {
+                      name: "nome",
+                      email: "e-mail",
+                      phone: "telefone",
+                      city: "cidade",
+                      linkedin_url: "LinkedIn",
+                    };
+                    const keys = Object.keys(
+                      r.contacts,
+                    ) as (keyof typeof labels)[];
+                    setContactFields(
+                      keys.filter((key) => !p[key]).map((key) => labels[key]),
+                    );
+                    setText(r.text);
+                    setShowText(true);
+                    setDraftMessage("");
+                    setP((x) => {
+                      const contacts = Object.fromEntries(
+                        keys
+                          .filter((key) => !x[key])
+                          .map((key) => [key, r.contacts[key]]),
+                      );
+                      return {
+                        ...x,
+                        ...contacts,
+                        confirmed: false,
+                        facts: x.facts.map((f) =>
+                          f.source === "pdf"
+                            ? { ...f, source: "manual", evidence: "" }
+                            : f,
+                        ),
+                      };
+                    });
+                  },
+                  "PDF importado. Confira o currículo e os dados do perfil.",
+                  setImportFeedback,
+                );
                 e.target.value = "";
               }}
             />
           </label>
+          <ActionFeedback feedback={importFeedback} />
           <div className="button-row">
             <button
               className="secondary"
@@ -944,7 +1433,25 @@ function ProfilePage({ state, act, busy }: Common) {
                     "/profile/extract",
                     "POST",
                   );
-                  setP((x) => ({ ...x, ...d, confirmed: false }));
+                  setP((x) => {
+                    const facts = [...x.facts];
+                    const known = new Set(facts.map((fact) => fact.text));
+                    const ids = new Set(facts.map((fact) => fact.id));
+                    let index = 1;
+                    for (const fact of d.facts || []) {
+                      if (known.has(fact.text) || facts.length >= 300) continue;
+                      while (ids.has(`pdf-${index}`)) index++;
+                      facts.push({ ...fact, id: `pdf-${index++}` });
+                      known.add(fact.text);
+                    }
+                    return {
+                      ...x,
+                      name: x.name || d.name || "",
+                      email: x.email || d.email || "",
+                      facts,
+                      confirmed: false,
+                    };
+                  });
                   setDraftMessage(
                     "Sugestões carregadas. Confira os fatos, selecione área e cargos e salve o perfil.",
                   );
@@ -968,10 +1475,19 @@ function ProfilePage({ state, act, busy }: Common) {
             </button>
           </div>
           {text && (
-            <details>
+            <details
+              open={showText}
+              onToggle={(event) => setShowText(event.currentTarget.open)}
+            >
               <summary>Texto extraído do currículo</summary>
               <pre className="source-text">{text}</pre>
             </details>
+          )}
+          {contactFields.length > 0 && (
+            <p className="notice">
+              Dados preenchidos a partir do PDF: {contactFields.join(", ")}.
+              Confira antes de confirmar o perfil.
+            </p>
           )}
           {draftMessage && <p className="notice">{draftMessage}</p>}
         </section>
@@ -986,6 +1502,7 @@ function ProfilePage({ state, act, busy }: Common) {
                   locations: split(locationsText),
                 }),
               "Perfil salvo.",
+              setSaveFeedback,
             );
           }}
         >
@@ -1135,7 +1652,7 @@ function ProfilePage({ state, act, busy }: Common) {
           <section className="panel">
             <div className="panel-heading">
               <div>
-                <h2>Fatos do seu currículo</h2>
+                <h2>Experiências, formação e competências</h2>
                 <button
                   type="button"
                   className="secondary"
@@ -1156,14 +1673,22 @@ function ProfilePage({ state, act, busy }: Common) {
                   Melhorar redação com IA
                 </button>
                 {state.profile.confirmed && (
-                  <a
-                    className="text-button"
-                    href="/api/profile/resume"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Baixar currículo padrão
-                  </a>
+                  <div className="button-row">
+                    <a
+                      className="secondary"
+                      href="/api/profile/resume"
+                      download
+                    >
+                      Currículo padrão em PDF
+                    </a>
+                    <a
+                      className="secondary"
+                      href="/api/profile/resume?format=docx"
+                      download
+                    >
+                      Currículo padrão em Word
+                    </a>
+                  </div>
                 )}
                 <p>
                   Experiências, formação, idiomas e competências verificáveis.
@@ -1180,6 +1705,7 @@ function ProfilePage({ state, act, busy }: Common) {
                       text: "",
                       evidence: "",
                       source: "manual",
+                      category: factFilter === "all" ? "other" : factFilter,
                     },
                   ])
                 }
@@ -1194,58 +1720,99 @@ function ProfilePage({ state, act, busy }: Common) {
                 fatos manualmente.
               </p>
             )}
-            {p.facts.map((f, i) => (
-              <div className="fact" key={f.id}>
-                <div>
-                  <span className="subtle-pill">
-                    {f.source === "pdf"
-                      ? "Trecho do PDF"
-                      : f.evidence
-                        ? "Sugestão de redação — revise"
-                        : "Informado por você"}
-                  </span>
-                  <button
-                    className="icon-btn"
-                    type="button"
-                    aria-label="Remover fato"
-                    onClick={() =>
-                      patch(
-                        "facts",
-                        p.facts.filter((x) => x.id !== f.id),
-                      )
-                    }
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-                {f.source === "manual" && f.evidence && (
-                  <details>
-                    <summary>Texto original para comparação</summary>
-                    <p>{f.evidence}</p>
-                  </details>
-                )}
-                <textarea
-                  required
-                  aria-label={`Fato profissional ${i + 1}`}
-                  value={f.text}
-                  onChange={(e) =>
-                    patch(
-                      "facts",
-                      p.facts.map((x) =>
-                        x.id === f.id
-                          ? {
-                              ...x,
-                              text: e.target.value,
-                              source: "manual",
-                              evidence: "",
-                            }
-                          : x,
-                      ),
-                    )
+            {p.facts.length > 0 && (
+              <Field label="Filtrar registros do perfil">
+                <select
+                  value={factFilter}
+                  onChange={(event) =>
+                    setFactFilter(event.target.value as FactCategory | "all")
                   }
-                />
-              </div>
-            ))}
+                >
+                  <option value="all">Todas as categorias</option>
+                  {Object.entries(factCategories).map(([key, label]) => (
+                    <option key={key} value={key}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
+            {p.facts.map(
+              (f, i) =>
+                (factFilter === "all" ||
+                  (f.category || "other") === factFilter) && (
+                  <div className="fact" key={f.id}>
+                    <div>
+                      <span className="subtle-pill">
+                        {f.source === "pdf"
+                          ? "Trecho do PDF"
+                          : f.evidence
+                            ? "Sugestão de redação — revise"
+                            : "Informado por você"}
+                      </span>
+                      <button
+                        className="icon-btn"
+                        type="button"
+                        aria-label="Remover fato"
+                        onClick={() =>
+                          patch(
+                            "facts",
+                            p.facts.filter((x) => x.id !== f.id),
+                          )
+                        }
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                    {f.source === "manual" && f.evidence && (
+                      <details>
+                        <summary>Texto original para comparação</summary>
+                        <p>{f.evidence}</p>
+                      </details>
+                    )}
+                    <Field label={`Categoria do registro ${i + 1}`}>
+                      <select
+                        value={f.category || "other"}
+                        onChange={(event) => {
+                          const category = event.target.value as FactCategory;
+                          patch(
+                            "facts",
+                            p.facts.map((fact) =>
+                              fact.id === f.id ? { ...fact, category } : fact,
+                            ),
+                          );
+                        }}
+                      >
+                        {Object.entries(factCategories).map(([key, label]) => (
+                          <option key={key} value={key}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <textarea
+                      required
+                      aria-label={`Fato profissional ${i + 1}`}
+                      value={f.text}
+                      onChange={(e) =>
+                        patch(
+                          "facts",
+                          p.facts.map((x) =>
+                            x.id === f.id
+                              ? {
+                                  ...x,
+                                  text: e.target.value,
+                                  source: "manual",
+                                  evidence: "",
+                                }
+                              : x,
+                          ),
+                        )
+                      }
+                    />
+                  </div>
+                ),
+            )}
             <h3>Respostas reutilizáveis para cadastros</h3>
             <p>
               Cadastre respostas factuais uma vez. Os conectores de formulários
@@ -1325,8 +1892,10 @@ function ProfilePage({ state, act, busy }: Common) {
               <Check size={17} />
               Salvar perfil
             </button>
+            <ActionFeedback feedback={saveFeedback} />
           </section>
         </form>
+        <ResumeVersions state={state} act={act} busy={busy} />
       </div>
       <aside>
         <section className="panel aside-note">
@@ -1928,36 +2497,53 @@ function JobsPage({
     </>
   );
 }
-function SettingsPage({ state, act, busy }: Common) {
+function SettingsPage({
+  state,
+  act,
+  busy,
+  section,
+  onTested,
+}: Common & {
+  section?: "ai" | "sources" | "email";
+  onTested?: () => void;
+}) {
   const [s, setS] = useState<Settings>(state.settings),
-    [tab, setTab] = useState("ai"),
+    [tab, setTab] = useState<string>(section || "ai"),
     [domains, setDomains] = useState(state.settings.allowed_domains.join(", "));
-  const change = (key: keyof Settings, value: unknown) =>
+  const [saveFeedback, setSaveFeedback] = useState<Feedback | null>(null);
+  const change = (key: keyof Settings, value: unknown) => {
+    setSaveFeedback(null);
     setS((x) => ({ ...x, [key]: value }));
+  };
   const payload = () => {
     const rest = editableSettings(s);
     return { ...rest, allowed_domains: split(domains) };
   };
   return (
-    <div className="settings-layout">
-      <div className="settings-nav">
-        {[
-          ["ai", "Inteligência artificial"],
-          ["automation", "Candidaturas e limites"],
-          ["sources", "Fontes de vagas"],
-          ["email", "Envio de e-mail"],
-          ["privacy", "Dados e privacidade"],
-        ].map(([id, label]) => (
-          <button
-            className={tab === id ? "active" : ""}
-            key={id}
-            onClick={() => setTab(id)}
-          >
-            {label}
-            <ChevronRight size={15} />
-          </button>
-        ))}
-      </div>
+    <div className={section ? undefined : "settings-layout"}>
+      {!section && (
+        <div className="settings-nav">
+          {[
+            ["ai", "Inteligência artificial"],
+            ["automation", "Candidaturas e limites"],
+            ["sources", "Fontes de vagas"],
+            ["email", "Envio de e-mail"],
+            ["privacy", "Dados e privacidade"],
+          ].map(([id, label]) => (
+            <button
+              className={tab === id ? "active" : ""}
+              key={id}
+              onClick={() => {
+                setSaveFeedback(null);
+                setTab(id);
+              }}
+            >
+              {label}
+              <ChevronRight size={15} />
+            </button>
+          ))}
+        </div>
+      )}
       <form
         className="panel"
         onSubmit={(e) => {
@@ -1965,13 +2551,18 @@ function SettingsPage({ state, act, busy }: Common) {
           act(
             () => api("/settings", "PUT", payload()),
             "Configurações salvas.",
+            setSaveFeedback,
           );
         }}
       >
         {tab === "ai" && (
           <AISettings
             settings={s}
-            update={(values) => setS((x) => ({ ...x, ...values }))}
+            update={(values) => {
+              setSaveFeedback(null);
+              setS((x) => ({ ...x, ...values }));
+            }}
+            onTested={onTested}
             save={() => api("/settings", "PUT", payload())}
             act={act}
             busy={busy}
@@ -2058,7 +2649,7 @@ function SettingsPage({ state, act, busy }: Common) {
             </div>
             <Toggle
               label="Rotina pausada"
-              hint="Enquanto pausada, não haverá execução nem envio, inclusive manual por e-mail."
+              hint="A pausa suspende a rotina agendada e os envios. A coleta manual de vagas continua disponível."
               checked={s.paused}
               onChange={(v) => change("paused", v)}
             />
@@ -2204,8 +2795,9 @@ function SettingsPage({ state, act, busy }: Common) {
               Adicionar fonte
             </button>
             <div className="notice">
-              LinkedIn e Gupy não estão conectados para busca ou envio
-              automático. Não insira senhas dessas plataformas aqui.
+              Para pesquisar no LinkedIn ou Indeed, selecione o portal na rotina
+              e entre pelo navegador interno. Para a Gupy, adicione a página
+              pública da empresa como fonte e habilite Gupy na rotina.
             </div>
           </>
         )}
@@ -2464,6 +3056,7 @@ function SettingsPage({ state, act, busy }: Common) {
               <Check size={17} />
               Salvar configurações
             </button>
+            <ActionFeedback feedback={saveFeedback} />
           </div>
         )}
       </form>
@@ -2472,6 +3065,7 @@ function SettingsPage({ state, act, busy }: Common) {
 }
 function SchedulePage({ state, act, busy }: Common) {
   const [s, setS] = useState(state.settings);
+  const [saveFeedback, setSaveFeedback] = useState<Feedback | null>(null);
   const change = (k: keyof Settings, v: unknown) =>
     setS((x) => ({ ...x, [k]: v }));
   return (
@@ -2482,7 +3076,11 @@ function SchedulePage({ state, act, busy }: Common) {
           onSubmit={(e) => {
             e.preventDefault();
             const payload = editableSettings(s);
-            act(() => api("/settings", "PUT", payload), "Agenda salva.");
+            act(
+              () => api("/settings", "PUT", payload),
+              "Agenda salva.",
+              setSaveFeedback,
+            );
           }}
         >
           <div className="panel-heading">
@@ -2549,12 +3147,14 @@ function SchedulePage({ state, act, busy }: Common) {
             onChange={(v) => change("paused", v)}
           />
           <div className="notice">
-            Se o computador estiver desligado no horário agendado, aquela
-            execução será pulada. Não há envio acumulado ao ligar novamente.
+            Ao ligar ou acordar depois do horário, a rotina pode executar no
+            mesmo dia, se ele estiver habilitado. Execuções de dias anteriores
+            não são acumuladas.
           </div>
           <button className="primary" disabled={busy}>
             Salvar agenda
           </button>
+          <ActionFeedback feedback={saveFeedback} />
         </form>
         <section className="panel aside-note">
           <h2>Controle da rotina</h2>

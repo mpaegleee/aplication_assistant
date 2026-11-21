@@ -31,7 +31,7 @@ ANSWER_GROUPS = (
 )
 
 
-def answer_for(label, profile):
+def answer_for(label, profile, *, allow_summary=False):
     key = normalize(label)
     saved = [
         a["answer"]
@@ -48,6 +48,21 @@ def answer_for(label, profile):
                 if normalize(a["question"]) in group
             }
             return answers.pop() if len(answers) == 1 else None
+    if allow_summary and profile.get("confirmed"):
+        category = {
+            "experiencia profissional": "experience",
+            "formacao academica": "education",
+            "cursos e certificacoes": "course",
+            "competencias": "skill",
+        }.get(key)
+        if category:
+            summary = "\n".join(
+                fact["text"]
+                for fact in profile.get("facts", [])
+                if fact.get("category") == category
+            )
+            # Leave large or ambiguous fields pending rather than silently truncating facts.
+            return summary if 0 < len(summary) <= 2000 else None
     return {
         "cidade": profile.get("city"),
         "cidade atual": profile.get("city"),
@@ -159,7 +174,9 @@ async def fill_inhire(page, profile, pdf, submit=False, before_submit=None):
             elif not answer:
                 pending.append(question or "Confirmação obrigatória sem resposta salva")
             continue
-        answer = answer_for(field["label"], profile)
+        answer = answer_for(
+            field["label"], profile, allow_summary=field["type"] == "textarea"
+        )
         if answer:
             operations.append((field, answer))
         else:

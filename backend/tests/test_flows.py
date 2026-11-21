@@ -440,3 +440,96 @@ def test_email_custom_instructions_or_negation_need_assistance(job):
     assert not email_eligible(job)
     job["description"] = "Vaga encerrada. Envie seu currículo para vagas@example.com."
     assert not email_eligible(job)
+
+
+def test_import_pdf_displays_original_and_fills_only_empty_fields(client, profile):
+    from reportlab.pdfgen.canvas import Canvas
+
+    profile.update(
+        name="",
+        email="original@example.com",
+        phone="",
+        city="",
+        linkedin_url="",
+        confirmed=False,
+    )
+    assert client.put("/api/profile", json=profile).status_code == 200
+    stream = BytesIO()
+    canvas = Canvas(stream)
+    lines = canvas.beginText(35, 780)
+    for line in (
+        "Pessoa da Silva",
+        "pessoa@example.com",
+        "Celular: +55 (48) 99999-1234",
+        "Florianópolis, SC",
+        "www.linkedin.com/in/pessoa-da-silva",
+        "Experiência em engenharia de software e desenvolvimento de serviços.",
+    ):
+        lines.textLine(line)
+    canvas.drawText(lines)
+    canvas.save()
+    pdf = stream.getvalue()
+    response = client.post(
+        "/api/profile/pdf",
+        files={"file": ("Currículo Pessoa.pdf", pdf, "application/pdf")},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["contacts"] == {
+        "name": "Pessoa da Silva",
+        "phone": "+55 (48) 99999-1234",
+        "city": "Florianópolis, SC",
+        "linkedin_url": "https://www.linkedin.com/in/pessoa-da-silva",
+    }
+    state = client.get("/api/state").json()
+    assert state["pdf_filename"] == "Currículo Pessoa.pdf"
+    assert state["profile"]["email"] == "original@example.com"
+    assert state["profile"]["phone"] == "+55 (48) 99999-1234"
+    assert not state["profile"]["confirmed"]
+    original = client.get("/api/profile/pdf")
+    assert original.content == pdf
+    assert original.headers["content-disposition"].startswith("attachment;")
+    assert original.headers["cache-control"] == "no-store"
+
+
+def test_legacy_pdf_without_filename_stays_downloadable(app, client):
+    app.state.store.put("pdf", {"text": "Currículo", "bytes": b"%PDF-legacy".hex()})
+    assert client.get("/api/state").json()["pdf_filename"] == "Curriculo.pdf"
+    assert client.get("/api/profile/pdf").content == b"%PDF-legacy"
+
+
+def test_focused_resume_downloads_use_only_selected_confirmed_facts(
+    client, profile, monkeypatch
+):
+    from xml.etree import ElementTree
+    from zipfile import ZipFile
+
+    profile["facts"] = [
+        {"id": "llm", "text": "Projeto com LLMs", "category": "experience"},
+        {"id": "python", "text": "Curso de Python & testes", "category": "course"},
+    ]
+    assert client.put("/api/profile", json=profile).status_code == 200
+    monkeypatch.setattr(AI, "call", lambda *a: {"fact_ids": ["python"]})
+    result = client.post("/api/profile/resume-versions", json={"focus": "Python"})
+    assert result.status_code == 200, result.text
+    version_url = "/api/profile/resume-versions/" + result.json()["id"]
+    pdf = client.get(version_url)
+    parsed = " ".join(
+        page.extract_text() for page in PdfReader(BytesIO(pdf.content)).pages
+    )
+    assert "Curso de Python & testes" in parsed and "LLMs" not in parsed
+    docx = client.get(version_url, params={"format": "docx"})
+    assert docx.status_code == 200
+    with ZipFile(BytesIO(docx.content)) as archive:
+        root = ElementTree.fromstring(archive.read("word/document.xml"))
+        contents = "".join(root.itertext())
+        assert (
+            "Cursos e certificações" in contents
+            and "Curso de Python & testes" in contents
+        )
+        assert "LLMs" not in contents
+    assert client.get("/api/profile/resume-versions").json()[0]["focus"] == "Python"
+    monkeypatch.setattr(AI, "call", lambda *a: {"fact_ids": ["inventado"]})
+    assert (
+        client.post("/api/profile/resume-versions", json={"focus": "Java"}).status_code
+        == 400
+    )

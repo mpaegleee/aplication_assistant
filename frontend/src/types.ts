@@ -1,8 +1,17 @@
+export const factCategories = {
+  experience: "Experiência profissional",
+  education: "Formação",
+  course: "Cursos e certificações",
+  skill: "Competências e idiomas",
+  other: "Outras qualificações",
+} as const;
+export type FactCategory = keyof typeof factCategories;
 export type Fact = {
   id: string;
   text: string;
   evidence: string;
   source: "pdf" | "manual";
+  category?: FactCategory;
 };
 export type Profile = {
   name: string;
@@ -37,6 +46,8 @@ export type Analysis = {
   resume_fact_ids?: string[];
 };
 export type JobInput = {
+  published_at?: string;
+  valid_until?: string;
   country?: "BR" | "unknown";
   title: string;
   company: string;
@@ -84,6 +95,8 @@ export type Settings = {
   daily_limit: number;
   ai_daily_limit: number;
   max_jobs_per_run: number;
+  max_job_age_days: 7 | 15 | 30;
+  include_undated_jobs: boolean;
   interval_seconds: number;
   paused: boolean;
   schedule_enabled: boolean;
@@ -148,6 +161,7 @@ export type AppState = {
       blocked: number;
       below_threshold: number;
       archived: number;
+      outside_window?: number;
     };
   };
   profile: Profile;
@@ -162,6 +176,7 @@ export type AppState = {
     action?: "collect" | "apply";
     consolidated?: number;
     found?: number;
+    skipped_age?: number;
     eligible?: number;
     pending?: number;
     duplicates?: number;
@@ -186,7 +201,9 @@ export type AppState = {
   }[];
   followups: Followup[];
   running: boolean;
+  configured_sources?: string[];
   pdf_imported: boolean;
+  pdf_filename?: string | null;
   connectors: {
     id: string;
     name: string;

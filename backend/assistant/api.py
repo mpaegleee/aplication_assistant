@@ -3,7 +3,8 @@ from pathlib import Path
 from typing import Literal
 from contextlib import asynccontextmanager
 from io import BytesIO
-from urllib.parse import urlsplit
+import secrets
+from urllib.parse import quote, urlsplit
 from fastapi import FastAPI, Request, HTTPException, UploadFile, File, Depends
 from fastapi.responses import FileResponse, Response, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -14,7 +15,7 @@ from pypdf import PdfReader
 from filelock import FileLock, Timeout
 from .models import Model, Profile, Settings, JobInput, AREAS, AIConnection
 from .providers import PROVIDERS
-from .connectors import CONNECTORS
+from .connectors import CONNECTORS, source_platform
 from .history import record_stage, metrics, STAGES
 from .store import Store, now
 from .engine import Engine, TERMINAL
@@ -25,6 +26,7 @@ from .mail import parse_followup, email_eligible
 from .browser import BrowserManager
 from .browser_api import install_browser_routes
 from .worklist import worklist
+from .documents import resume_contacts, resume_docx, resume_pdf
 
 
 def data_directory():
@@ -41,6 +43,23 @@ def data_directory():
 class Password(Model):
     password: str = Field(min_length=12, max_length=256)
     setup_token: str = Field(default="", max_length=256)
+
+
+class ResumeFocus(Model):
+    focus: str = Field(min_length=2, max_length=150)
+
+
+def resume_download(content, label, format):
+    content_type = (
+        "application/pdf"
+        if format == "pdf"
+        else "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+    return Response(
+        content,
+        media_type=content_type,
+        headers={"Content-Disposition": f'attachment; filename="{label}.{format}"'},
+    )
 
 
 class RunInput(Model):
@@ -122,7 +141,7 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
 
     app = FastAPI(
         title="Application Assistant",
-        version="0.5.0",
+        version="0.6.0",
         lifespan=lifespan,
         docs_url=None,
         redoc_url=None,
@@ -169,8 +188,49 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request, exc):
-        fields = ", ".join(".".join(str(x) for x in e["loc"][1:]) for e in exc.errors())
-        return JSONResponse({"detail": "Confira os campos: " + fields}, status_code=422)
+        labels = {
+            "ai_url": "Endereço da API de IA",
+            "ai_model": "Modelo de IA",
+            "allowed_domains": "Domínios autorizados",
+            "browser_search_queries": "Termos de busca nos portais",
+            "interval_seconds": "Intervalo entre vagas",
+            "minimum_confidence": "Confiança mínima",
+            "threshold": "Aderência mínima",
+            "time": "Horário da agenda",
+            "sources": "Fontes de vagas",
+            "smtp_from": "E-mail de envio",
+            "smtp_port": "Porta SMTP",
+            "imap_port": "Porta IMAP",
+            "email": "E-mail para contato",
+            "linkedin_url": "Endereço público do LinkedIn",
+        }
+        problems = []
+        for error in exc.errors():
+            location = error["loc"][1:]
+            field = str(location[0]) if location else ""
+            label = labels.get(field, field.replace("_", " ").capitalize())
+            if (
+                field == "sources"
+                and len(location) > 1
+                and isinstance(location[1], int)
+            ):
+                label = f"Fonte {location[1] + 1}"
+            context = error.get("ctx", {})
+            kind = error["type"]
+            if kind == "value_error" and isinstance(context.get("error"), ValueError):
+                message = str(context["error"])
+            elif kind == "greater_than_equal":
+                message = f"Informe um valor a partir de {context['ge']}."
+            elif kind == "less_than_equal":
+                message = f"Informe um valor de até {context['le']}."
+            elif kind == "missing":
+                message = "Preencha este campo."
+            else:
+                message = "Confira o valor informado."
+            problems.append(f"{label}: {message}" if label else message)
+        return JSONResponse(
+            {"detail": " ".join(dict.fromkeys(problems))}, status_code=422
+        )
 
     @app.exception_handler(ValueError)
     async def value_error(request, exc):
@@ -213,7 +273,7 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
 
     @app.get("/api/health")
     def health():
-        return {"ok": True, "version": "0.5.0"}
+        return {"ok": True, "version": "0.6.0"}
 
     @app.get("/api/session")
     def session(request: Request):
@@ -256,8 +316,18 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
             j.pop("resume_snapshot", None)
             j.pop("submitted_profile", None)
             j["email_eligible"] = email_eligible(j)
+        pdf = store.get("pdf", default={})
+        search_platforms = set(settings["search_platforms"])
+        configured_sources = sorted(
+            (search_platforms & {"linkedin", "indeed"})
+            | {
+                source_platform(source)
+                for source in settings["sources"]
+                if source["enabled"] and source_platform(source) in search_platforms
+            }
+        )
         return {
-            "version": "0.5.0",
+            "version": "0.6.0",
             "profile": engine.profile(),
             "settings": settings,
             "jobs": jobs,
@@ -276,7 +346,9 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
                 "email": "smtp",
                 "followup": "eml",
             },
-            "pdf_imported": bool(store.get("pdf")),
+            "configured_sources": configured_sources,
+            "pdf_imported": bool(pdf),
+            "pdf_filename": pdf.get("filename", "Curriculo.pdf") if pdf else None,
         }
 
     @app.put("/api/settings", dependencies=[Depends(auth)])
@@ -369,9 +441,27 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
             raise ValueError(
                 "PDF sem texto legível. Exporte o currículo pelo LinkedIn; imagens precisam de OCR externo."
             )
+        filename = Path((file.filename or "").replace("\\", "/")).name
+        filename = "".join(char for char in filename if char.isprintable()).strip()[
+            :240
+        ]
+        if not filename.lower().endswith(".pdf"):
+            filename = filename + ".pdf" if filename else "Curriculo.pdf"
         with engine.lock:
-            store.put("pdf", {"text": text, "bytes": content.hex(), "at": now()})
+            store.put(
+                "pdf",
+                {
+                    "text": text,
+                    "bytes": content.hex(),
+                    "at": now(),
+                    "filename": filename,
+                },
+            )
             p = engine.profile()
+            contacts = {
+                key: value for key, value in resume_contacts(text).items() if not p[key]
+            }
+            p.update(contacts)
             p["confirmed"] = False
             # Preserve previously imported facts as explicit user-owned facts.
             for fact in p["facts"]:
@@ -381,8 +471,21 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
             store.put("profile", p)
         return {
             "text": text,
+            "contacts": contacts,
             "message": "PDF importado. Extraia sugestões com IA e revise antes de confirmar.",
         }
+
+    @app.get("/api/profile/pdf", dependencies=[Depends(auth)])
+    def download_pdf():
+        pdf = store.get("pdf", default={})
+        if not pdf.get("bytes"):
+            raise HTTPException(404, "Importe o PDF primeiro.")
+        filename = quote(pdf.get("filename") or "Curriculo.pdf", safe="")
+        return Response(
+            bytes.fromhex(pdf["bytes"]),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"},
+        )
 
     @app.get("/api/profile/pdf-text", dependencies=[Depends(auth)])
     def pdf_text():
@@ -472,12 +575,15 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
         return engine.send(id)
 
     @app.get("/api/jobs/{id}/resume", dependencies=[Depends(auth)])
-    def resume(id: str):
-        return Response(
-            engine.pdf(id),
-            media_type="application/pdf",
-            headers={"Content-Disposition": 'attachment; filename="Curriculo.pdf"'},
-        )
+    def resume(id: str, format: Literal["pdf", "docx"] = "pdf"):
+        if format == "pdf":
+            return resume_download(engine.pdf(id), "Curriculo", format)
+        job = engine.require_job(id)
+        if job.get("resume_snapshot") and job.get("submitted_profile"):
+            profile, analysis = job["submitted_profile"], job["analysis"]
+        else:
+            profile, _, analysis = engine.valid_analysis(job)
+        return resume_download(resume_docx(profile, analysis), "Curriculo", format)
 
     @app.post("/api/jobs/{id}/status", dependencies=[Depends(auth)])
     def status(id: str, payload: StatusInput):
@@ -490,6 +596,7 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
             if payload.status == "submitted_manual" and j["status"] not in TERMINAL:
                 p, s, a = engine.valid_analysis(j)
                 j["resume_snapshot"] = engine.pdf(id).hex()
+                j["submitted_profile"] = p
             if payload.status in FOLLOWUP_STATES and j["status"] not in TERMINAL:
                 raise ValueError("Registre o envio antes de acompanhar o retorno.")
             record_stage(j, payload.status, "manual")
@@ -529,20 +636,57 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
         return {"ok": True}
 
     @app.get("/api/profile/resume", dependencies=[Depends(auth)])
-    def standard_resume():
-        from .documents import resume_pdf
-
+    def standard_resume(format: Literal["pdf", "docx"] = "pdf"):
         profile = engine.profile()
         if not profile["confirmed"]:
             raise ValueError("Confirme o perfil antes de gerar o currículo.")
-        return Response(
-            resume_pdf(
-                profile, {"resume_fact_ids": [f["id"] for f in profile["facts"]]}
-            ),
-            media_type="application/pdf",
-            headers={
-                "Content-Disposition": 'attachment; filename="Curriculo-padrao.pdf"'
-            },
+        analysis = {"resume_fact_ids": [f["id"] for f in profile["facts"]]}
+        render = resume_pdf if format == "pdf" else resume_docx
+        return resume_download(render(profile, analysis), "Curriculo-padrao", format)
+
+    @app.post("/api/profile/resume-versions", dependencies=[Depends(auth)])
+    def create_resume_version(payload: ResumeFocus):
+        with engine.lock:
+            profile = engine.profile()
+            if not profile["confirmed"]:
+                raise ValueError("Confirme e salve o perfil antes de gerar uma versão.")
+            selected = AI(store).choose_resume_facts(
+                engine.settings(), profile, payload.focus
+            )
+            snapshot = {
+                **profile,
+                "facts": [fact for fact in profile["facts"] if fact["id"] in selected],
+            }
+            key = secrets.token_hex(12)
+            version = {"id": key, "focus": payload.focus, "at": now()}
+            store.put(
+                "resume_versions",
+                {
+                    **version,
+                    "profile": snapshot,
+                    "analysis": {"resume_fact_ids": selected},
+                },
+                key,
+            )
+        return version
+
+    @app.get("/api/profile/resume-versions", dependencies=[Depends(auth)])
+    def resume_versions():
+        return [
+            {field: version[field] for field in ("id", "focus", "at")}
+            for version in store.all("resume_versions")[:20]
+        ]
+
+    @app.get("/api/profile/resume-versions/{id}", dependencies=[Depends(auth)])
+    def download_resume_version(id: str, format: Literal["pdf", "docx"] = "pdf"):
+        version = store.get("resume_versions", id)
+        if not version:
+            raise HTTPException(404, "Versão de currículo não encontrada.")
+        render = resume_pdf if format == "pdf" else resume_docx
+        return resume_download(
+            render(version["profile"], version["analysis"]),
+            "Curriculo-direcionado",
+            format,
         )
 
     @app.post("/api/followups/sync", dependencies=[Depends(auth)])
@@ -614,6 +758,10 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
     )
     if static.exists():
         app.mount("/assets", StaticFiles(directory=static / "assets"), name="assets")
+
+        @app.get("/favicon.png")
+        def favicon():
+            return FileResponse(static / "favicon.png", media_type="image/png")
 
         @app.get("/")
         def index():

@@ -29,11 +29,16 @@ class Model(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
+FactCategory = Literal["experience", "education", "course", "skill", "other"]
+FACT_CATEGORIES = {"experience", "education", "course", "skill", "other"}
+
+
 class Fact(Model):
     id: str = Field(min_length=1, max_length=80, pattern=r"^[\w-]+$")
     text: str = Field(min_length=3, max_length=2000)
     evidence: str = Field(default="", max_length=2000)
     source: Literal["pdf", "manual"] = "manual"
+    category: FactCategory = "other"
 
 
 class SavedAnswer(Model):
@@ -118,6 +123,8 @@ class Settings(Model):
     minimum_confidence: int = Field(default=85, ge=50, le=100)
     daily_limit: int = Field(default=10, ge=1, le=100)
     ai_daily_limit: int = Field(default=50, ge=1, le=1000)
+    max_job_age_days: Literal[7, 15, 30] = 30
+    include_undated_jobs: bool = True
     max_jobs_per_run: int = Field(default=20, ge=1, le=100)
     interval_seconds: int = Field(default=15, ge=5, le=600)
     paused: bool = True
@@ -217,6 +224,8 @@ class AIConnection(Model):
 
 
 class JobInput(Model):
+    published_at: str = Field(default="", max_length=40)
+    valid_until: str = Field(default="", max_length=40)
     country: Literal["BR", "unknown"] = "BR"
     title: str = Field(min_length=3, max_length=200)
     company: str = Field(min_length=2, max_length=200)
