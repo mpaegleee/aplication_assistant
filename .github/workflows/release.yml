@@ -1,0 +1,60 @@
+name: Publicar pacotes de uma versão
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag do rascunho no GitHub Releases
+        required: true
+      windows_run:
+        description: ID da execução de empacotamento Windows
+        required: true
+      linux_run:
+        description: ID da execução de empacotamento Linux
+        required: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ inputs.tag }}
+      WINDOWS_RUN: ${{ inputs.windows_run }}
+      LINUX_RUN: ${{ inputs.linux_run }}
+    steps:
+      - name: Validar o rascunho e as compilações
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$WINDOWS_RUN" =~ ^[0-9]+$ && "$LINUX_RUN" =~ ^[0-9]+$ ]]
+          draft=$(gh release view "$RELEASE_TAG" --json isDraft,targetCommitish)
+          test "$(jq -r .isDraft <<< "$draft")" = true
+          target=$(jq -r .targetCommitish <<< "$draft")
+          for run in "$WINDOWS_RUN" "$LINUX_RUN"; do
+            gh run view "$run" --json conclusion,headSha | jq -e --arg target "$target" '.conclusion == "success" and .headSha == $target' >/dev/null
+          done
+      - name: Baixar e verificar os pacotes
+        run: |
+          set -euo pipefail
+          version=${RELEASE_TAG#v}
+          gh run download "$WINDOWS_RUN" -n "ApplicationAssistant-Windows-$version" -D windows
+          gh run download "$LINUX_RUN" -n "ApplicationAssistant-Linux-$version" -D linux
+          mkdir dist
+          installer="ApplicationAssistant-Setup-$version-Windows-x64.exe"
+          linux_package="ApplicationAssistant-$version-Linux-x64.tar.gz"
+          source_package="ApplicationAssistant-Codigo-$version.zip"
+          install -m 644 "$(find windows -type f -name "$installer")" "dist/$installer"
+          install -m 644 "$(find linux -type f -name "$linux_package")" "dist/$linux_package"
+          install -m 644 "$(find linux -type f -name "$source_package")" "dist/$source_package"
+          cd dist
+          for file in "$installer" "$linux_package" "$source_package"; do
+            sha256sum "$file" > "$file.sha256"
+          done
+      - name: Enviar arquivos e publicar a prévia
+        run: |
+          set -euo pipefail
+          gh release upload "$RELEASE_TAG" dist/* --clobber
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease
