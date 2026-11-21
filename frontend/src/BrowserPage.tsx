@@ -15,10 +15,14 @@ export function BrowserPage({
   state,
   refresh,
   target,
+  returnToWorklist,
+  fixedPortal,
 }: {
   state: AppState;
   refresh: () => Promise<unknown>;
   target?: { platform: string; job_id: string } | null;
+  returnToWorklist?: () => void;
+  fixedPortal?: boolean;
 }) {
   const [platform, setPlatform] = useState(target?.platform || "linkedin");
   const [url, setUrl] = useState("");
@@ -82,6 +86,7 @@ export function BrowserPage({
         if (typeof value.controlled === "boolean") {
           setControlled(value.controlled);
           load().catch(() => {});
+          if (!value.controlled) refresh().catch(() => {});
         }
       }
     };
@@ -95,7 +100,7 @@ export function BrowserPage({
       ws.close();
       if (previous) URL.revokeObjectURL(previous);
     };
-  }, [platform, load]);
+  }, [platform, load, refresh]);
   async function action(task: () => Promise<unknown>) {
     setBusy(true);
     setMessage("");
@@ -143,6 +148,7 @@ export function BrowserPage({
           Portal
           <select
             value={platform}
+            disabled={fixedPortal || controlled}
             onChange={(e) => {
               setPlatform(e.target.value);
               setUrl("");
@@ -175,7 +181,7 @@ export function BrowserPage({
           Abrir portal
         </button>
         <button
-          disabled={!connected || controlled}
+          disabled={!connected || controlled || !current?.open}
           onClick={() => send({ type: "acquire" })}
         >
           Assumir controle
@@ -189,6 +195,15 @@ export function BrowserPage({
         >
           Salvar sessão e liberar controle
         </button>
+        {returnToWorklist && (
+          <button
+            className="secondary"
+            disabled={controlled}
+            onClick={returnToWorklist}
+          >
+            Voltar para Vagas consolidadas
+          </button>
+        )}
         <button
           disabled={busy || controlled}
           onClick={() => action(() => api(`/browser/${platform}`, "DELETE"))}
@@ -205,6 +220,12 @@ export function BrowserPage({
       {message && (
         <p role="status" className="banner">
           {message}
+        </p>
+      )}
+      {image && !controlled && (
+        <p className="notice">
+          Você está apenas visualizando a página. Clique em{" "}
+          <strong>Assumir controle</strong> para poder interagir com ela.
         </p>
       )}
       <div
@@ -280,7 +301,13 @@ export function BrowserPage({
           disabled={!controlled}
           onClick={() => send({ type: "key", key: "Tab" })}
         >
-          Próximo campo
+          Próximo campo (Tab)
+        </button>
+        <button
+          disabled={!controlled}
+          onClick={() => send({ type: "key", key: "Space" })}
+        >
+          Marcar opção em foco (Espaço)
         </button>
         <button
           disabled={!controlled}

@@ -628,6 +628,14 @@ function App() {
               state={state}
               refresh={refresh}
               target={browserTarget}
+              returnToWorklist={
+                browserTarget
+                  ? () => {
+                      setBrowserTarget(null);
+                      setPage("worklist");
+                    }
+                  : undefined
+              }
             />
           )}
           {page === "help" && <Help />}
@@ -635,7 +643,7 @@ function App() {
         <footer>
           Application Assistant{" "}
           <span>Feito para tornar a busca por emprego mais humana.</span>
-          <span>v0.6.0 · teste local</span>
+          <span>v0.6.1 · teste local</span>
         </footer>
       </div>
       {toast && (
@@ -916,50 +924,36 @@ function SetupGuide({
   const [sourceUrl, setSourceUrl] = useState("");
   const [sourceFeedback, setSourceFeedback] = useState<Feedback | null>(null);
   const [testedModel, setTestedModel] = useState("");
-  const [sessions, setSessions] = useState<
-    { id: string; saved_at?: string; controlled: boolean }[]
-  >([]);
+  const [loginPortal, setLoginPortal] = useState("");
   const settings = state.settings;
   const sources = state.configured_sources || [];
   const portals = sources.filter(
     (source) => source === "linkedin" || source === "indeed",
   );
-  const missingSessions = portals.filter(
-    (portal) =>
-      !sessions.some(
-        (item) => item.id === portal && item.saved_at && !item.controlled,
-      ),
+  const portalIssues = state.search_portal_issues || {};
+  const missingSessions = portals.filter((portal) =>
+    Boolean(portalIssues[portal]),
   );
+  const selectedPortal =
+    portals.find((portal) => portal === loginPortal) ||
+    missingSessions[0] ||
+    portals[0];
+  const portalNames = { linkedin: "LinkedIn", indeed: "Indeed" };
   const model = `${settings.ai_url}|${settings.ai_model}`;
   const steps = [
     "Inteligência artificial",
     "Currículo e perfil",
     "Fontes e rotina",
-    "Sessões e envio",
+    "Conectar contas",
     "Teste de coleta",
   ];
-  useEffect(() => {
-    if (step < 3) return;
-    let active = true;
-    const update = () =>
-      api<typeof sessions>("/browser")
-        .then((result) => {
-          if (active) setSessions(result);
-        })
-        .catch(() => {});
-    void update();
-    const timer = window.setInterval(update, 3000);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-    };
-  }, [step]);
   const canTest =
     settings.ai_consent &&
     !!settings.ai_model &&
     state.profile.confirmed &&
-    sources.length > 0 &&
-    missingSessions.length === 0;
+    sources.some(
+      (source) => !missingSessions.some((portal) => portal === source),
+    );
   const disabledReasons = [
     !settings.ai_consent || !settings.ai_model
       ? "Configure e salve o modelo com consentimento."
@@ -969,7 +963,7 @@ function SetupGuide({
       : "",
     !sources.length ? "Salve pelo menos uma fonte habilitada na rotina." : "",
     missingSessions.length
-      ? `Entre e libere o controle em: ${missingSessions.join(", ")}.`
+      ? `Conecte as contas em: ${missingSessions.map((portal) => portalNames[portal]).join(", ")}.`
       : "",
   ].filter(Boolean);
   async function addSource() {
@@ -1080,8 +1074,9 @@ function SetupGuide({
               <ActionFeedback feedback={sourceFeedback} />
             </form>
             <p>
-              Para LinkedIn e Indeed, selecione os portais abaixo e salve as
-              preferências.
+              Ao selecionar LinkedIn ou Indeed, salve as preferências e entre na
+              conta na etapa Conectar contas. Feeds e páginas públicas
+              disponíveis podem ser pesquisados sem login.
             </p>
           </section>
           <section className="panel button-row">
@@ -1122,20 +1117,49 @@ function SetupGuide({
       )}
       {step === 3 && (
         <>
-          {portals.length > 0 && (
-            <section className="panel">
-              <h3>Conectar portais de busca</h3>
+          <section className="panel">
+            <h3>Conecte as contas usadas na busca</h3>
+            {portals.length === 0 ? (
               <p>
-                Entre nos portais selecionados, salve a sessão e libere o
-                controle. A coleta de teste verifica se a sessão ainda funciona.
+                As fontes selecionadas nesta configuração não exigem login no
+                navegador interno.
               </p>
-              <BrowserPage
-                state={state}
-                refresh={refresh}
-                target={{ platform: portals[0], job_id: "" }}
-              />
-            </section>
-          )}
+            ) : (
+              <>
+                <p>
+                  Para pesquisar em cada portal abaixo, clique em Abrir portal,
+                  assuma o controle, entre na sua conta e salve a sessão.
+                </p>
+                <div className="button-row">
+                  {portals.map((portal) => (
+                    <button
+                      key={portal}
+                      type="button"
+                      className={
+                        portal === selectedPortal ? "primary" : "secondary"
+                      }
+                      aria-pressed={portal === selectedPortal}
+                      onClick={() => setLoginPortal(portal)}
+                    >
+                      {portalNames[portal]} ·{" "}
+                      {portalIssues[portal]
+                        ? "Pendência de conexão"
+                        : "Sessão salva"}
+                    </button>
+                  ))}
+                </div>
+                {selectedPortal && (
+                  <BrowserPage
+                    key={selectedPortal}
+                    state={state}
+                    refresh={refresh}
+                    target={{ platform: selectedPortal, job_id: "" }}
+                    fixedPortal
+                  />
+                )}
+              </>
+            )}
+          </section>
           <details>
             <summary>Configurar envio por e-mail, se for usar</summary>
             <SettingsPage state={state} act={act} busy={busy} section="email" />
@@ -1154,6 +1178,15 @@ function SetupGuide({
                   testou o modelo.
                 </p>
               )}
+            {missingSessions.length > 0 && (
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setStep(3)}
+              >
+                Conectar contas pendentes
+              </button>
+            )}
             {disabledReasons.length > 0 && (
               <ul>
                 {disabledReasons.map((reason) => (

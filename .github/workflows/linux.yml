@@ -38,14 +38,14 @@ jobs:
         run: |
           aa_runtime=$(dirname "$(dirname "$(uv python find --system --managed-python --resolve-links 3.14.10)")")
           .venv/bin/python packaging/build_linux.py --runtime "$aa_runtime" --site .venv/lib/python3.14/site-packages --browsers browsers
-          git archive --format=zip --prefix=Application-Assistant/ -o dist/ApplicationAssistant-Codigo-0.6.0.zip HEAD
-          sha256sum dist/ApplicationAssistant-Codigo-0.6.0.zip > dist/ApplicationAssistant-Codigo-0.6.0.zip.sha256
+          git archive --format=zip --prefix=Application-Assistant/ -o dist/ApplicationAssistant-Codigo-0.6.1.zip HEAD
+          sha256sum dist/ApplicationAssistant-Codigo-0.6.1.zip > dist/ApplicationAssistant-Codigo-0.6.1.zip.sha256
       - name: Testar instalação e atualização com dados preservados
-        run: .venv/bin/python packaging/test_upgrade.py linux dist/ApplicationAssistant-0.6.0-Linux-x64.tar.gz 0.6.0
+        run: .venv/bin/python packaging/test_upgrade.py linux dist/ApplicationAssistant-0.6.1-Linux-x64.tar.gz 0.6.1
       - uses: actions/upload-artifact@v4
         with:
-          name: ApplicationAssistant-Linux-0.6.0
+          name: ApplicationAssistant-Linux-0.6.1
           path: |
             dist/*.tar.gz*
-            dist/ApplicationAssistant-Codigo-0.6.0.zip*
+            dist/ApplicationAssistant-Codigo-0.6.1.zip*
           retention-days: 14

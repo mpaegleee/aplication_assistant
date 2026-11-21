@@ -118,6 +118,20 @@ export function Worklist({ state, busy, act, openBrowser, go }: Props) {
             para selecionar os portais ou adicionar um feed.
           </p>
         )}
+        {Object.entries(state.search_portal_issues || {}).map(
+          ([platform, issue]) => (
+            <div className="notice" key={platform}>
+              <p>{issue}</p>
+              <button
+                className="secondary"
+                disabled={busy || state.running}
+                onClick={() => openBrowser({ platform, job_id: "" })}
+              >
+                Conectar {sourceNames[platform] || platform}
+              </button>
+            </div>
+          ),
+        )}
         <p>
           {state.worklist.summary.eligible} aderentes ·{" "}
           {state.worklist.summary.stale} sem análise atual ·{" "}

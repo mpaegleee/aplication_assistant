@@ -170,6 +170,7 @@ def test_portal_selected_queries_and_posts_flow_without_sending(
     )
     app.state.store.put("profile", profile)
     app.state.store.put("settings", settings)
+    app.state.store.put("browser_sessions", {"saved_at": "test"}, "linkedin")
     calls = []
 
     def records(settings, platform, query="", source_url=None):
@@ -397,3 +398,55 @@ def test_public_job_dates_can_be_parsed_without_ai():
         read_source(rss, "https://empresa.example.com/feed")[0]["published_at"]
         == "2026-10-01"
     )
+
+
+def test_missing_portal_sessions_are_reported_once_before_collecting(
+    app, client, settings, monkeypatch
+):
+    settings.update(
+        paused=True,
+        search_platforms=["linkedin", "indeed"],
+        browser_search_queries=["Python", "Agilidade", "PMO"],
+    )
+    app.state.store.put("settings", settings)
+    engine = app.state.engine
+    monkeypatch.setattr(
+        engine,
+        "portal_records",
+        lambda *a: pytest.fail("Browser must not open without a session"),
+    )
+    assert set(client.get("/api/state").json()["search_portal_issues"]) == {
+        "linkedin",
+        "indeed",
+    }
+    engine.run("collect")
+    run = app.state.store.all("runs")[0]
+    assert run["status"] == "blocked" and run["found"] == 0
+    assert len(run["errors"]) == 2
+    assert [entry["platform"] for entry in run["sources"]] == ["linkedin", "indeed"]
+
+
+def test_one_connected_portal_is_enough_to_collect(
+    app, profile, settings, analysis, monkeypatch
+):
+    settings.update(
+        search_platforms=["linkedin", "indeed"], browser_search_queries=["Python"]
+    )
+    app.state.store.put("profile", profile)
+    app.state.store.put("settings", settings)
+    app.state.store.put("browser_sessions", {"saved_at": "test"}, "linkedin")
+    engine = app.state.engine
+    checked = []
+
+    def records(_, platform, query):
+        checked.append(platform)
+        return [raw_post()]
+
+    monkeypatch.setattr(engine, "portal_records", records)
+    monkeypatch.setattr(AI, "call", lambda *args: extracted())
+    monkeypatch.setattr(AI, "analyze", lambda *args: copy.deepcopy(analysis))
+    engine.run("collect")
+    run = app.state.store.all("runs")[0]
+    assert checked == ["linkedin"]
+    assert run["found"] == 1 and run["sent"] == 0 and run["status"] == "completed"
+    assert len(run["errors"]) == 1 and "Indeed" in run["errors"][0]

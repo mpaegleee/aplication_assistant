@@ -202,6 +202,7 @@ export type AppState = {
   followups: Followup[];
   running: boolean;
   configured_sources?: string[];
+  search_portal_issues?: Record<string, string>;
   pdf_imported: boolean;
   pdf_filename?: string | null;
   connectors: {

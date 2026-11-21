@@ -16,6 +16,13 @@ const format = (date: string) => new Date(date).toLocaleString("pt-BR");
 export function RunSummary({ state }: { state: AppState }) {
   const run = state.runs[0];
   if (!run) return null;
+  const warnings = [...new Set(run.errors)];
+  const blocked =
+    run.status === "blocked" ||
+    (run.status === "completed" &&
+      (run.found ?? 0) === 0 &&
+      warnings.length > 0 &&
+      !run.sources?.some((source) => source.status === "completed"));
   return (
     <section className="panel">
       <div className="panel-heading">
@@ -32,13 +39,17 @@ export function RunSummary({ state }: { state: AppState }) {
             {format(run.started_at)} ·{" "}
             {run.status === "running"
               ? "Em execução"
-              : run.status === "completed"
-                ? "Concluída"
-                : run.status === "time_limit"
-                  ? "Limite de duração atingido"
-                  : run.status === "paused"
-                    ? "Pausada"
-                    : "Interrompida"}
+              : blocked
+                ? "Busca bloqueada"
+                : run.status === "completed"
+                  ? warnings.length > 0
+                    ? "Concluída com avisos"
+                    : "Concluída"
+                  : run.status === "time_limit"
+                    ? "Limite de duração atingido"
+                    : run.status === "paused"
+                      ? "Pausada"
+                      : "Interrompida"}
           </p>
         </div>
         {(run.pending || 0) > 0 ||
@@ -49,6 +60,18 @@ export function RunSummary({ state }: { state: AppState }) {
           <CheckCircle2 size={21} />
         )}
       </div>
+      {warnings.length > 0 && (
+        <div className="notice" role="status">
+          <strong>
+            {blocked ? "O que impediu a busca" : "Avisos da busca"}
+          </strong>
+          <ul>
+            {warnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="stats-grid">
         {[
           ["Encontradas", run.found ?? "—"],
@@ -71,11 +94,6 @@ export function RunSummary({ state }: { state: AppState }) {
           SMTP não confirma recebimento ou cadastro num portal.
         </small>
       </p>
-      {run.errors.map((error, index) => (
-        <p className="notice" key={index}>
-          {error}
-        </p>
-      ))}
     </section>
   );
 }

@@ -116,7 +116,7 @@ def test_internal_viewer_controls_chromium_and_restores_encrypted_session(app, c
         await context.route(
             "https://fixture.inhire.app/**",
             lambda route: route.fulfill(
-                body='<meta charset="utf-8"><label>Teste<input id="test"></label>',
+                body='<meta charset="utf-8"><label>Teste<input id="test"></label><label><input type="checkbox" id="option">Confirmar opção de teste</label>',
                 content_type="text/html",
             ),
         )
@@ -137,10 +137,11 @@ def test_internal_viewer_controls_chromium_and_restores_encrypted_session(app, c
             ]
         )
         await page.evaluate("localStorage.setItem('fixture-token','STORAGE-SECRET')")
-        box = await page.locator("input").bounding_box()
-        return box
+        text = await page.locator("#test").bounding_box()
+        option = await page.locator("#option").bounding_box()
+        return text, option
 
-    box = manager.call(prepare())
+    box, option = manager.call(prepare())
     with client.websocket_connect(
         "/api/browser/inhire/view", headers={"origin": "http://testserver"}
     ) as ws:
@@ -159,13 +160,17 @@ def test_internal_viewer_controls_chromium_and_restores_encrypted_session(app, c
         assert until_json() == {"controlled": True}
         ws.send_json({"type": "click", "x": box["x"] + 5, "y": box["y"] + 5})
         ws.send_json({"type": "text", "text": "Pessoa Teste"})
+        ws.send_json({"type": "click", "x": option["x"] + 5, "y": option["y"] + 5})
         ws.send_json({"type": "release"})
         assert until_json() == {"controlled": False}
 
         async def read():
-            return await manager.pages["inhire"].locator("input").input_value()
+            page = manager.pages["inhire"]
+            return await page.locator("#test").input_value(), await page.locator(
+                "#option"
+            ).is_checked()
 
-        assert manager.call(read()) == "Pessoa Teste"
+        assert manager.call(read()) == ("Pessoa Teste", True)
         image = ws.receive()
         while not image.get("bytes"):
             image = ws.receive()
@@ -463,3 +468,27 @@ def test_automatic_run_linkedin_to_gupy_receipt_and_duplicate(
         assert len([url for url in calls if "/candidates/jobs/" in url]) == 1
     finally:
         manager.close()
+
+
+def test_portal_search_reports_human_verification():
+    from assistant.portal_discovery import collect
+    from playwright.async_api import async_playwright
+
+    async def run():
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(
+                headless=True, channel="chromium", chromium_sandbox=True
+            )
+            page = await browser.new_page()
+            await page.route(
+                "https://www.linkedin.com/**",
+                lambda route: route.fulfill(
+                    body='<meta charset="utf-8"><h1>Executando verificação de segurança</h1>',
+                    content_type="text/html",
+                ),
+            )
+            with pytest.raises(ValueError, match="verificação humana"):
+                await collect(page, "linkedin", "Agile Coach", 10, posts=False)
+            await browser.close()
+
+    asyncio.run(run())

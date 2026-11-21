@@ -10,7 +10,9 @@ Assistente gratuito e de código aberto para organizar a busca por emprego no Br
 
 O currículo destaca e ordena fatos confirmados do perfil; a IA não cria certificações ou experiências para aumentar a aderência.
 
-## Versão 0.6.0
+## Versão 0.6.1
+
+A etapa Conectar contas informa quais portais exigem login. A busca avisa quando uma fonte está bloqueada e continua nas fontes disponíveis.
 
 A configuração guiada reúne IA, perfil, fontes, sessões e coleta de teste. O PDF importado fica disponível para download e pode preencher contatos em branco. A coleta manual funciona com a agenda pausada. A atualização preserva os dados da versão anterior.
 
@@ -31,13 +33,13 @@ Os downloads ficam em [GitHub Releases](https://github.com/mpaegleee/aplication_
 
 | Sistema | Arquivo | Como usar |
 |---|---|---|
-| Windows 10/11 x64 | `ApplicationAssistant-Setup-0.6.0-Windows-x64.exe` | Executar o instalador e abrir pelo atalho |
-| Linux x64 | `ApplicationAssistant-0.6.0-Linux-x64.tar.gz` | Extrair e executar `./Iniciar.sh`; `./Instalar.sh` cria o atalho |
-| Desenvolvimento | `ApplicationAssistant-Codigo-0.6.0.zip` | Código, testes e scripts de build |
+| Windows 10/11 x64 | `ApplicationAssistant-Setup-0.6.1-Windows-x64.exe` | Executar o instalador e abrir pelo atalho |
+| Linux x64 | `ApplicationAssistant-0.6.1-Linux-x64.tar.gz` | Extrair e executar `./Iniciar.sh`; `./Instalar.sh` cria o atalho |
+| Desenvolvimento | `ApplicationAssistant-Codigo-0.6.1.zip` | Código, testes e scripts de build |
 
 Python, driver e Chromium acompanham os pacotes de uso. No Linux, bibliotecas de sistema do Chromium ainda podem ser necessárias. O computador deve permanecer ligado, sem suspensão, com o processo aberto. Para servidor próprio, há instalação Docker.
 
-- [Guia da versão: fila manual, rotina, busca em posts e limitações](docs/ATUALIZACAO-0.6.0.md)
+- [Guia da versão: fila manual, rotina, busca em posts e limitações](docs/ATUALIZACAO-0.6.1.md)
 - [Configuração para usuários](docs/GUIA-DO-USUARIO.md)
 - [Instalar no Linux](docs/LINUX.md)
 - [Verificação e testes](docs/VERIFICACAO.md)

@@ -56,6 +56,39 @@ def structured_dates(scripts, data):
     }
 
 
+class PortalAccessRequired(ValueError):
+    """The portal requires manual authentication or verification."""
+
+
+async def require_search_access(page):
+    if (
+        await page.locator(
+            'iframe[src*="challenges.cloudflare.com"]:visible, form#challenge-form:visible'
+        ).count()
+        or await page.get_by_text(
+            re.compile(
+                r"^(executando verificação de segurança|performing security verification|confirme que é humano|verify you are human)$",
+                re.I,
+            )
+        ).count()
+    ):
+        raise PortalAccessRequired(
+            "O portal pediu uma verificação humana. Abra a página no navegador interno e conclua a verificação. Enquanto ela estiver pendente, a busca neste portal não pode continuar."
+        )
+    if (
+        re.search(
+            r"/login|/signin|/checkpoint|/authwall|/account/login",
+            urlsplit(page.url).path,
+        )
+        or await page.locator(
+            'input[type="password"]:visible, iframe[src*="captcha"]:visible'
+        ).count()
+    ):
+        raise PortalAccessRequired(
+            "O portal pediu login ou verificação. Entre no navegador interno, salve a sessão e libere o controle."
+        )
+
+
 async def collect(page, platform, query, limit, posts=True, source_url=None):
     searches = (
         [source_url]
@@ -83,15 +116,7 @@ async def collect(page, platform, query, limit, posts=True, source_url=None):
         if len(records) >= limit:
             break
         await page.goto(search, wait_until="domcontentloaded", timeout=45000)
-        if (
-            re.search(r"/login|/signin|/checkpoint|/authwall|/account/login", page.url)
-            or await page.locator(
-                'input[type="password"]:visible, iframe[src*="captcha"]:visible'
-            ).count()
-        ):
-            raise ValueError(
-                "Login ou verificação necessária. Abra o portal no navegador interno, entre e libere o controle."
-            )
+        await require_search_access(page)
         is_post = "/search/results/content/" in search
         selector = (
             '[data-urn*="activity:"], article'
@@ -196,13 +221,7 @@ async def collect(page, platform, query, limit, posts=True, source_url=None):
                 continue
             seen.add(url)
             await page.goto(url, wait_until="domcontentloaded", timeout=45000)
-            if (
-                re.search(r"/login|/signin|/checkpoint|/authwall", page.url)
-                or await page.locator('input[type="password"]:visible').count()
-            ):
-                raise ValueError(
-                    "A sessão expirou ou o portal exige login. Reabra o navegador interno."
-                )
+            await require_search_access(page)
             data = await page.evaluate(
                 """() => { const e=document.querySelector('.jobs-details__main-content, .jobsearch-JobComponent, main'); return e ? {text:e.innerText, datetime:e.querySelector('time[datetime]')?.getAttribute('datetime') || '', links:Array.from(e.querySelectorAll('a[href]')).map(a=>({url:a.href,label:a.innerText}))} : {text:'',links:[]}; }"""
             )

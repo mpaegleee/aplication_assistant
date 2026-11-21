@@ -141,7 +141,7 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
 
     app = FastAPI(
         title="Application Assistant",
-        version="0.6.0",
+        version="0.6.1",
         lifespan=lifespan,
         docs_url=None,
         redoc_url=None,
@@ -273,7 +273,7 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
 
     @app.get("/api/health")
     def health():
-        return {"ok": True, "version": "0.6.0"}
+        return {"ok": True, "version": "0.6.1"}
 
     @app.get("/api/session")
     def session(request: Request):
@@ -327,7 +327,7 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
             }
         )
         return {
-            "version": "0.6.0",
+            "version": "0.6.1",
             "profile": engine.profile(),
             "settings": settings,
             "jobs": jobs,
@@ -347,6 +347,12 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
                 "followup": "eml",
             },
             "configured_sources": configured_sources,
+            "search_portal_issues": {
+                platform: issue
+                for platform in ("linkedin", "indeed")
+                if platform in search_platforms
+                and (issue := engine.portal_search_issue(platform))
+            },
             "pdf_imported": bool(pdf),
             "pdf_filename": pdf.get("filename", "Curriculo.pdf") if pdf else None,
         }

@@ -17,6 +17,7 @@ from .mail import email_eligible, build_email, smtp_send, prepare_delivery
 from .connectors import CONNECTORS, platform_for, source_platform, source_address
 from .history import record_stage
 from .job_dates import outside_window
+from .portal_discovery import PortalAccessRequired
 
 TERMINAL = {
     "sent",
@@ -618,15 +619,19 @@ class Engine:
         today = datetime.now(ZoneInfo(settings["timezone"])).date()
         return outside_window(data, settings, today, require_date=require_date)
 
+    def portal_search_issue(self, platform):
+        name = {"linkedin": "LinkedIn", "indeed": "Indeed"}[platform]
+        if not self.store.get("browser_sessions", platform):
+            return f"{name}: faça login no navegador da aplicação e use Salvar sessão e liberar controle."
+        if self.browser and platform in self.browser.leases:
+            return f"{name}: salve a sessão e libere o controle do navegador antes de buscar."
+        return ""
+
     def portal_records(self, settings, platform, query="", source_url=None):
         if not self.browser:
             raise ValueError("Navegador interno indisponível.")
-        if not source_url and not self.store.get("browser_sessions", platform):
-            raise ValueError(
-                "Entre em "
-                + platform
-                + " no navegador interno, salve a sessão e libere o controle."
-            )
+        if not source_url and (issue := self.portal_search_issue(platform)):
+            raise ValueError(issue)
         return self.browser.call(
             self.browser.discover(
                 platform,
@@ -717,6 +722,24 @@ class Engine:
             for platform in ("linkedin", "indeed"):
                 if platform not in settings["search_platforms"]:
                     continue
+                issue = self.portal_search_issue(platform) or (
+                    ""
+                    if queries
+                    else f"{capabilities[platform]['name']}: informe termos de busca ou cargos no perfil."
+                )
+                if issue:
+                    run["errors"].append(issue)
+                    run["sources"].append(
+                        {
+                            "name": capabilities[platform]["name"],
+                            "platform": platform,
+                            "found": 0,
+                            "new": 0,
+                            "duplicates": 0,
+                            "status": "pending",
+                        }
+                    )
+                    continue
                 for query in queries:
                     if interrupted() or len(seen) >= settings["max_jobs_per_run"]:
                         break
@@ -735,6 +758,11 @@ class Engine:
                             records, settings, run, entry, seen, interrupted
                         )
                         entry["status"] = "completed"
+                    except PortalAccessRequired as exc:
+                        entry["status"] = "pending"
+                        run["errors"].append(f"{capabilities[platform]['name']}: {exc}")
+                        self.store.put("runs", run, run["id"])
+                        break
                     except ValueError as exc:
                         entry["status"] = "pending"
                         run["errors"].append(
@@ -814,6 +842,10 @@ class Engine:
                         "Falha ao consultar a fonte: " + source["name"]
                     )
                 self.store.put("runs", run, run["id"])
+            if not run["sources"] and not run["errors"]:
+                run["errors"].append(
+                    "Nenhuma fonte habilitada para consulta. Adicione uma fonte na Configuração guiada ou habilite um portal."
+                )
             jobs = []
             for job in self.store.all("jobs"):
                 if (
@@ -915,6 +947,13 @@ class Engine:
                 or self.stop.is_set()
                 else "time_limit"
                 if time.monotonic() - started >= limit
+                else "blocked"
+                if run["errors"]
+                and not run["found"]
+                and not run["items"]
+                and not any(
+                    source["status"] == "completed" for source in run["sources"]
+                )
                 else "completed"
             )
         except Exception:
