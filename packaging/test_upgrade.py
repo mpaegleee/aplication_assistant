@@ -5,6 +5,7 @@ import hashlib
 import io
 import os
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -88,8 +89,12 @@ def install(platform, package, root, env, *, previous=False):
 
 @contextmanager
 def app_session(command, env, version, log):
-    with log.open("w+") as output:
-        process = subprocess.Popen(command, env=env, stdout=output, stderr=output)
+    windows = sys.platform == "win32"
+    flags = subprocess.CREATE_NEW_PROCESS_GROUP if windows else 0
+    with log.open("w+", encoding="utf-8", errors="replace") as output:
+        process = subprocess.Popen(
+            command, env=env, stdout=output, stderr=output, creationflags=flags
+        )
         try:
             with httpx.Client(
                 base_url=f"http://127.0.0.1:{env['AA_PORT']}",
@@ -124,8 +129,23 @@ def app_session(command, env, version, log):
             raise
         finally:
             if process.poll() is None:
-                process.terminate()
-                process.wait(timeout=20)
+                try:
+                    if windows:
+                        process.send_signal(signal.CTRL_BREAK_EVENT)
+                    else:
+                        process.terminate()
+                    process.wait(timeout=20)
+                except (OSError, subprocess.TimeoutExpired):
+                    if windows:
+                        subprocess.run(
+                            ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                            capture_output=True,
+                            timeout=10,
+                            check=False,
+                        )
+                    if process.poll() is None:
+                        process.kill()
+                    process.wait(timeout=10)
 
 
 def write_test_data(client):
@@ -216,7 +236,7 @@ def verify_upgrade(platform, package, version, root):
     assert (data / "vault.key").read_bytes() == original_key
     assert Store(data).get("settings")["ai_key"] == AI_KEY
     print(
-        f"Atualização 0.5.0 → {version} ({platform}): senha, chave, PDF, perfil, candidatura e histórico preservados."
+        f"Upgrade 0.5.0 to {version} ({platform}): password, key, PDF, profile, application and history preserved."
     )
 
 
@@ -226,7 +246,9 @@ if __name__ == "__main__":
     parser.add_argument("package", type=Path)
     parser.add_argument("version")
     options = parser.parse_args()
-    with tempfile.TemporaryDirectory(prefix="aa-upgrade-") as temporary:
+    with tempfile.TemporaryDirectory(
+        prefix="aa-upgrade-", ignore_cleanup_errors=sys.platform == "win32"
+    ) as temporary:
         verify_upgrade(
             options.platform,
             options.package.resolve(),
