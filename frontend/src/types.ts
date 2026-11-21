@@ -78,7 +78,7 @@ export type Job = JobInput & {
   browser_confirmed?: boolean;
   archived?: boolean;
   pending_code?: string;
-  origins?: { url: string; platform: string; source: string }[];
+  origins?: { url: string; platform: string; source: string; kind?: string }[];
 };
 export type Settings = {
   search_platforms: string[];

@@ -2,9 +2,9 @@
 
 Distribuições com glibc 2.28 ou superior, ambiente gráfico para abrir a interface local e bibliotecas do Chromium. O pacote é preparado com CPython portátil, dependências Python e Chromium. A validação disponível usa Debian 13 x64; outras distribuições precisam do primeiro teste. Alpine/musl e ARM não são suportados por este artefato.
 
-1. Extraia `ApplicationAssistant-0.6.1-Linux-x64.tar.gz` em uma pasta pessoal.
+1. Extraia `ApplicationAssistant-0.6.2-Linux-x64.tar.gz` em uma pasta pessoal.
 2. Na pasta extraída, execute `./Iniciar.sh`.
-3. Abra `http://127.0.0.1:8765`, crie uma senha e siga o guia da versão 0.6.1.
+3. Abra `http://127.0.0.1:8765`, crie uma senha e siga o guia da versão 0.6.2.
 4. Opcional: `./Instalar.sh` copia para `~/.local/share/ApplicationAssistant` e adiciona um atalho ao menu. Não exige administrador para copiar o aplicativo.
 
 Mantenha o terminal aberto e o computador sem suspensão. Os dados ficam em `~/.application-assistant`, separados da instalação.

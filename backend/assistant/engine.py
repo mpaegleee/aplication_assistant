@@ -1,7 +1,7 @@
 import threading, hashlib, json, secrets, time
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from .models import Profile, Settings
+from .models import LINKEDIN_PREVIEW_SOURCES, LINKEDIN_USER_IMPORTS, Profile, Settings
 from .store import now
 from .matching import hard_blocks, fingerprint, validate_analysis, infer_area
 from .ai import AI
@@ -120,7 +120,7 @@ class Engine:
                         data[field] = existing[field]
                 if (
                     existing["status"] not in TERMINAL
-                    and data.get("source") != "linkedin_alert"
+                    and data.get("source") not in LINKEDIN_PREVIEW_SOURCES
                     and existing["description"] != data["description"]
                 ):
                     existing.update(
@@ -134,6 +134,49 @@ class Engine:
             if created:
                 self.store.event(id, "Oportunidade adicionada.")
             return self.store.get("jobs", id), created
+
+    def import_linkedin_page_jobs(self, jobs, source, kind):
+        with self.lock:
+            existing = {
+                application_identity(job["url"]): job["id"]
+                for job in self.store.all("jobs")
+                if job.get("url") and platform_for(job["url"]) == "linkedin"
+            }
+            created = 0
+            for job in jobs:
+                url = job["url"]
+                origin = {
+                    "url": url,
+                    "platform": "linkedin",
+                    "source": source,
+                    "kind": kind,
+                }
+                if existing_id := existing.get(application_identity(url)):
+                    saved = self.require_job(existing_id)
+                    if (
+                        job.get("source") == "linkedin_visible_detail"
+                        and saved.get("source") in LINKEDIN_PREVIEW_SOURCES
+                        and saved["status"] not in TERMINAL | {"sending"}
+                        and not saved.get("area_reviewed")
+                    ):
+                        saved.update(
+                            job,
+                            status="new",
+                            analysis=None,
+                            approved=False,
+                            pending_code="",
+                            pending_reason="",
+                        )
+                        self.store.put("jobs", saved, existing_id)
+                    origins = saved.setdefault("origins", [])
+                    if origin not in origins:
+                        origins.append(origin)
+                        self.store.put("jobs", saved, existing_id)
+                    continue
+                saved, new = self.add_job(job, origin)
+                existing[application_identity(url)] = saved["id"]
+                created += int(new)
+            return created
 
     def require_job(self, id):
         j = self.store.get("jobs", id)
@@ -546,11 +589,13 @@ class Engine:
         )
         if reason:
             return self.pending(job, "outside_window", reason)
-        if job.get("source") == "linkedin_alert" and not job.get("area_reviewed"):
+        if job.get("source") in LINKEDIN_PREVIEW_SOURCES and not job.get(
+            "area_reviewed"
+        ):
             return self.pending(
                 job,
                 "alert_review",
-                "Vaga recebida por alerta. Abra a vaga para conferir a descrição e a área.",
+                "Vaga importada como prévia. Abra o anúncio para conferir a descrição e a área.",
             )
         job = self.analyze(job["id"])
         if job["status"] == "blocked":
@@ -568,11 +613,11 @@ class Engine:
                 "manual_ready",
                 "Vaga aderente consolidada. Pronta para candidatura manual na aplicação.",
             )
-        if job.get("source") == "linkedin_alert":
+        if job.get("source") in LINKEDIN_USER_IMPORTS:
             return self.pending(
                 job,
                 "alert_review",
-                "Vaga recebida por alerta. Confira os detalhes no LinkedIn antes de se candidatar.",
+                "A vaga foi importada da tela do LinkedIn. Finalize a candidatura no link original.",
             )
         destination = (
             "email"
@@ -947,13 +992,13 @@ class Engine:
                     if job.get("pending_code") != "outside_window":
                         self.pending(job, "outside_window", reason)
                     continue
-                if job.get("source") == "linkedin_alert" and not job.get(
+                if job.get("source") in LINKEDIN_PREVIEW_SOURCES and not job.get(
                     "area_reviewed"
                 ):
                     self.pending(
                         job,
                         "alert_review",
-                        "Vaga recebida por alerta. Abra a vaga para conferir a descrição e a área.",
+                        "Vaga importada como prévia. Abra o anúncio para conferir a descrição e a área.",
                     )
                     run["pending"] += 1
                     continue

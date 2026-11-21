@@ -10,7 +10,9 @@ Assistente gratuito e de código aberto para organizar a busca por emprego no Br
 
 O currículo destaca e ordena fatos confirmados do perfil; a IA não cria certificações ou experiências para aumentar a aderência.
 
-## Versão 0.6.1
+## Versão 0.6.2
+
+Abra uma busca do LinkedIn no Chromium da aplicação e use **Importar vagas desta tela** para consolidar os resultados carregados. A coleta por e-mail está documentada no [guia de alertas](docs/ALERTAS-LINKEDIN.md).
 
 A etapa Conectar contas informa quais portais exigem login. A busca avisa quando uma fonte está bloqueada e continua nas fontes disponíveis.
 
@@ -33,13 +35,13 @@ Os downloads ficam em [GitHub Releases](https://github.com/mpaegleee/aplication_
 
 | Sistema | Arquivo | Como usar |
 |---|---|---|
-| Windows 10/11 x64 | `ApplicationAssistant-Setup-0.6.1-Windows-x64.exe` | Executar o instalador e abrir pelo atalho |
-| Linux x64 | `ApplicationAssistant-0.6.1-Linux-x64.tar.gz` | Extrair e executar `./Iniciar.sh`; `./Instalar.sh` cria o atalho |
-| Desenvolvimento | `ApplicationAssistant-Codigo-0.6.1.zip` | Código, testes e scripts de build |
+| Windows 10/11 x64 | `ApplicationAssistant-Setup-0.6.2-Windows-x64.exe` | Executar o instalador e abrir pelo atalho |
+| Linux x64 | `ApplicationAssistant-0.6.2-Linux-x64.tar.gz` | Extrair e executar `./Iniciar.sh`; `./Instalar.sh` cria o atalho |
+| Desenvolvimento | `ApplicationAssistant-Codigo-0.6.2.zip` | Código, testes e scripts de build |
 
 Python, driver e Chromium acompanham os pacotes de uso. No Linux, bibliotecas de sistema do Chromium ainda podem ser necessárias. O computador deve permanecer ligado, sem suspensão, com o processo aberto. Para servidor próprio, há instalação Docker.
 
-- [Guia da versão: fila manual, rotina, busca em posts e limitações](docs/ATUALIZACAO-0.6.1.md)
+- [Guia da versão: fila manual, rotina, busca em posts e limitações](docs/ATUALIZACAO-0.6.2.md)
 - [Configuração para usuários](docs/GUIA-DO-USUARIO.md)
 - [Instalar no Linux](docs/LINUX.md)
 - [Verificação e testes](docs/VERIFICACAO.md)

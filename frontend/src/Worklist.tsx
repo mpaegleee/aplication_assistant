@@ -11,14 +11,22 @@ type Props = {
   act: Action;
   openBrowser: (target: { platform: string; job_id: string }) => void;
   go: (page: string) => void;
+  initialTab?: "eligible" | "linkedin-imports";
 };
-export function Worklist({ state, busy, act, openBrowser, go }: Props) {
+export function Worklist({
+  state,
+  busy,
+  act,
+  openBrowser,
+  go,
+  initialTab = "eligible",
+}: Props) {
   const [query, setQuery] = useState("");
   const [collectFeedback, setCollectFeedback] = useState<Feedback | null>(null);
   const [visible, setVisible] = useState(20);
   const [minimum, setMinimum] = useState(state.settings.threshold);
   const [platform, setPlatform] = useState("");
-  const [tab, setTab] = useState("eligible");
+  const [tab, setTab] = useState<string>(initialTab);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const entries = new Map(state.worklist.items.map((e) => [e.job_id, e]));
   const active = state.jobs.filter(
@@ -44,8 +52,13 @@ export function Worklist({ state, busy, act, openBrowser, go }: Props) {
       tab === "archived"
         ? j.archived
         : !j.archived &&
-          (tab === "alerts"
-            ? j.source === "linkedin_alert"
+          (tab === "linkedin-imports"
+            ? j.source === "linkedin_alert" ||
+              j.source === "linkedin_visible" ||
+              j.origins?.some(
+                (origin) =>
+                  origin.platform === "linkedin" && origin.kind === "visible",
+              )
             : tab === "review"
               ? !entries.has(j.id)
               : entries.has(j.id)),
@@ -155,7 +168,7 @@ export function Worklist({ state, busy, act, openBrowser, go }: Props) {
               <button
                 className="secondary"
                 onClick={() => {
-                  setTab("alerts");
+                  setTab("linkedin-imports");
                   setVisible(20);
                 }}
               >
@@ -218,7 +231,9 @@ export function Worklist({ state, busy, act, openBrowser, go }: Props) {
             <select value={tab} onChange={(e) => setTab(e.target.value)}>
               <option value="eligible">Aderentes e prontas</option>
               <option value="review">Revisar informações ou análise</option>
-              <option value="alerts">Alertas do LinkedIn</option>
+              <option value="linkedin-imports">
+                Vagas importadas do LinkedIn
+              </option>
               <option value="archived">Arquivadas</option>
             </select>
           </label>
@@ -286,7 +301,12 @@ export function Worklist({ state, busy, act, openBrowser, go }: Props) {
               )}
             </p>
             <details>
-              <summary>Descrição completa, instruções e análise</summary>
+              <summary>
+                {job.source === "linkedin_alert" ||
+                job.source === "linkedin_visible"
+                  ? "Prévia da vaga"
+                  : "Descrição, instruções e análise"}
+              </summary>
               <p className="vacancy-description">{job.description}</p>
               {job.analysis?.criteria &&
                 Object.entries(job.analysis.criteria).map(([name, c]) => (
@@ -332,6 +352,20 @@ export function Worklist({ state, busy, act, openBrowser, go }: Props) {
               >
                 Analisar e preparar currículo
               </button>
+              {!entry && job.source.startsWith("linkedin_visible") && (
+                <button
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() =>
+                    act(
+                      () => open(job),
+                      "Anúncio aberto no navegador da aplicação.",
+                    )
+                  }
+                >
+                  Abrir vaga no navegador interno
+                </button>
+              )}
               {entry && (
                 <>
                   <a

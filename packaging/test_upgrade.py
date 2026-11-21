@@ -1,4 +1,4 @@
-"""Install the published 0.5.0, create test data, then install the new package over it."""
+"""Install the published 0.6.1, create test data, then install the new package over it."""
 
 import argparse
 import hashlib
@@ -21,15 +21,15 @@ from assistant.history import record_stage
 from assistant.store import Store
 from reportlab.pdfgen.canvas import Canvas
 
-BASE = "https://github.com/mpaegleee/aplication_assistant/releases/download/v0.5.0/"
+BASE = "https://github.com/mpaegleee/aplication_assistant/releases/download/v0.6.1/"
 PREVIOUS = {
     "windows": (
-        "ApplicationAssistant-Setup-0.5.0-Windows-x64.exe",
-        "487b6c23a3986fecac6fdaff09e98116c6413191b7d0b60eff7eaefe6f4fa7ee",
+        "ApplicationAssistant-Setup-0.6.1-Windows-x64.exe",
+        "ea156d0a4b7f584897013dcc19f3171c38ac66b367ffce02d9b3173b0b7fa74e",
     ),
     "linux": (
-        "ApplicationAssistant-0.5.0-Linux-x64.tar.gz",
-        "989c4cfbac443c8f80504c6aeade5c83875734e73fde0a5c64185833e7f3ead7",
+        "ApplicationAssistant-0.6.1-Linux-x64.tar.gz",
+        "cc17606d7ccdf9a3e0249b4953f8f5fa83476460e25f05928cac7d2f5026358b",
     ),
 }
 PASSWORD = "ci-only-upgrade-password-123"
@@ -49,7 +49,7 @@ def previous_package(platform, root):
     return path
 
 
-def install(platform, package, root, env, *, previous=False):
+def install(platform, package, root, env):
     if platform == "windows":
         app_path = root / "program"
         subprocess.run(
@@ -66,18 +66,7 @@ def install(platform, package, root, env, *, previous=False):
         return app_path / "ApplicationAssistant.exe"
     with tempfile.TemporaryDirectory(dir=root) as staging:
         with tarfile.open(package) as archive:
-            if previous:
-                # The published Linux 0.5.0 included the build virtualenv as its
-                # runtime. Install exactly its app and UI, using the runner's
-                # interpreter to create the database with the previous code.
-                members = (
-                    item
-                    for item in archive
-                    if not item.name.startswith("ApplicationAssistant-Linux/runtime/")
-                )
-                archive.extractall(staging, members=members, filter="data")
-            else:
-                archive.extractall(staging, filter="data")
+            archive.extractall(staging, filter="data")
         subprocess.run(
             [str(Path(staging) / "ApplicationAssistant-Linux" / "Instalar.sh")],
             env=env,
@@ -201,12 +190,8 @@ def verify_upgrade(platform, package, version, root):
     }
     # Point the installed app at its own bundled Chromium.
     env.pop("PLAYWRIGHT_BROWSERS_PATH", None)
-    launcher = install(platform, prior, root, env, previous=True)
-    if platform == "linux":
-        previous_command = [sys.executable, str(launcher.parent / "app/launcher.py")]
-    else:
-        previous_command = [str(launcher)]
-    with app_session(previous_command, env, "0.5.0", root / "old.log") as client:
+    launcher = install(platform, prior, root, env)
+    with app_session([str(launcher)], env, "0.6.1", root / "old.log") as client:
         job_id, document = write_test_data(client)
     store = Store(data)
     job = store.get("jobs", job_id)
@@ -236,7 +221,7 @@ def verify_upgrade(platform, package, version, root):
     assert (data / "vault.key").read_bytes() == original_key
     assert Store(data).get("settings")["ai_key"] == AI_KEY
     print(
-        f"Upgrade 0.5.0 to {version} ({platform}): password, key, PDF, profile, application and history preserved."
+        f"Upgrade 0.6.1 to {version} ({platform}): password, key, PDF, profile, application and history preserved."
     )
 
 

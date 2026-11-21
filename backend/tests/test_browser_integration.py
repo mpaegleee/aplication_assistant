@@ -492,3 +492,97 @@ def test_portal_search_reports_human_verification():
             await browser.close()
 
     asyncio.run(run())
+
+
+def test_linkedin_capture_adds_only_loaded_links_and_preserves_original(
+    app, client, job
+):
+    import json
+
+    manager = app.state.engine.browser
+    original, _ = app.state.engine.add_job(
+        {
+            **job,
+            "url": "https://www.linkedin.com/jobs/view/123?trk=existing",
+        }
+    )
+    visited = []
+
+    async def open_fixture():
+        context = await manager.context("linkedin")
+
+        async def fixture(route):
+            visited.append(route.request.url)
+            if "/jobs/view/456" in route.request.url:
+                await route.fulfill(
+                    content_type="text/html; charset=utf-8",
+                    body="""<main><h1>Scrum Master</h1>
+                    <span class="topcard__org-name-link">Empresa Teste</span>
+                    <span class="topcard__flavor-row">Brasil · Remoto</span>
+                    <div id="job-details">Requisitos: experiência com Scrum, facilitação de equipes distribuídas e melhoria contínua.</div></main>""",
+                )
+                return
+            await route.fulfill(
+                content_type="text/html; charset=utf-8",
+                body="""<main><ul>
+                <li><a href="/jobs/view/123/?trk=listing">Agile Coach</a></li>
+                <li><a href="/jobs/search/?currentJobId=456&amp;trackingId=private">Scrum Master</a>
+                    <a href="/jobs/view/456/">Ver vaga</a>
+                    <p class="artdeco-entity-lockup__subtitle">Empresa Teste</p>
+                    <span class="artdeco-entity-lockup__caption">São Paulo</span></li>
+                <li hidden><a href="/jobs/view/789/">For a hidden test</a></li>
+                <li><a href="https://not-linkedin.example/jobs/view/999/">Outro site</a></li>
+                </ul></main>""",
+            )
+
+        await context.route("https://www.linkedin.com/**", fixture)
+        await manager.open(
+            "linkedin", "https://www.linkedin.com/jobs/search/?keywords=Agile"
+        )
+
+    manager.call(open_fixture())
+    with client.websocket_connect(
+        "/api/browser/linkedin/view", headers={"origin": "http://testserver"}
+    ) as ws:
+
+        def response():
+            for _ in range(10):
+                item = ws.receive()
+                if item.get("text"):
+                    return json.loads(item["text"])
+            pytest.fail("No textual response")
+
+        ws.send_json({"type": "acquire"})
+        assert response() == {"controlled": True}
+        ws.send_json({"type": "capture-linkedin"})
+        assert response() == {"capture": {"found": 2, "created": 1}}
+        ws.send_json({"type": "capture-linkedin"})
+        assert response() == {"capture": {"found": 2, "created": 0}}
+        ws.send_json({"type": "release"})
+        assert response() == {"controlled": False}
+    saved = app.state.store.all("jobs")
+    assert len(saved) == 2
+    assert saved[0]["url"] == "https://www.linkedin.com/jobs/view/456"
+    assert saved[0]["company"] == "Empresa Teste"
+    assert saved[0]["analysis"] is None and saved[0]["source"] == "linkedin_visible"
+    assert (
+        app.state.engine.require_job(original["id"])["description"]
+        == original["description"]
+    )
+    assert len(visited) == 1
+    job_id = saved[0]["id"]
+    opened = client.post("/api/jobs/" + job_id + "/browser/open")
+    assert opened.status_code == 200, opened.text
+    with client.websocket_connect(
+        "/api/browser/linkedin/view", headers={"origin": "http://testserver"}
+    ) as ws:
+        ws.send_json({"type": "acquire"})
+        assert response() == {"controlled": True}
+        ws.send_json({"type": "capture-linkedin"})
+        assert response() == {"capture": {"found": 1, "created": 0}}
+    updated = app.state.engine.require_job(job_id)
+    assert updated["source"] == "linkedin_visible_detail"
+    assert "facilitação de equipes" in updated["description"]
+    assert updated["country"] == "BR" and updated["modality"] == "Remoto"
+    assert updated["analysis"] is None
+    assert len(visited) == 2

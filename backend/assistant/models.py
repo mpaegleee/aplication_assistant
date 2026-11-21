@@ -25,6 +25,10 @@ AREAS = [
 ]
 
 
+LINKEDIN_PREVIEW_SOURCES = {"linkedin_alert", "linkedin_visible"}
+LINKEDIN_USER_IMPORTS = LINKEDIN_PREVIEW_SOURCES | {"linkedin_visible_detail"}
+
+
 class Model(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 

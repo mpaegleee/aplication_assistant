@@ -17,12 +17,14 @@ export function BrowserPage({
   refresh,
   target,
   returnToWorklist,
+  openLinkedinImports,
   fixedPortal,
 }: {
   state: AppState;
   refresh: () => Promise<unknown>;
   target?: { platform: string; job_id: string } | null;
   returnToWorklist?: () => void;
+  openLinkedinImports?: () => void;
   fixedPortal?: boolean;
 }) {
   const [platform, setPlatform] = useState(target?.platform || "linkedin");
@@ -35,7 +37,18 @@ export function BrowserPage({
   const [controlled, setControlled] = useState(false);
   const [connected, setConnected] = useState(false);
   const [message, setMessage] = useState("");
+  const [capture, setCapture] = useState<{
+    found: number;
+    created: number;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [openImportsAfterRelease, setOpenImportsAfterRelease] = useState(false);
+  useEffect(() => {
+    if (openImportsAfterRelease && !controlled) {
+      setOpenImportsAfterRelease(false);
+      openLinkedinImports?.();
+    }
+  }, [openImportsAfterRelease, controlled, openLinkedinImports]);
   const socket = useRef<WebSocket | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const viewport = useRef<HTMLDivElement>(null);
@@ -58,6 +71,7 @@ export function BrowserPage({
     setConnected(false);
     setImage("");
     setMessage("");
+    setCapture(null);
     let previous = "";
     const ws = new WebSocket(
       `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/api/browser/${platform}/view`,
@@ -73,6 +87,10 @@ export function BrowserPage({
       } else {
         const value = JSON.parse(event.data);
         if (value.error) setMessage(value.error);
+        if (value.capture) {
+          setCapture(value.capture);
+          refresh().catch(() => {});
+        }
         if (value.notice) {
           setMessage(value.notice);
           setFiles([]);
@@ -214,6 +232,61 @@ export function BrowserPage({
       </div>
       {platform === "linkedin" && (
         <div className="notice">
+          <div className="button-row">
+            <button
+              className="secondary"
+              disabled={busy || controlled}
+              onClick={() =>
+                action(() =>
+                  api("/browser/open", "POST", {
+                    platform,
+                    url: linkedinSearchUrl(state),
+                  }),
+                )
+              }
+            >
+              Abrir busca no navegador interno
+            </button>
+            <button
+              className="primary"
+              disabled={!controlled}
+              onClick={() => {
+                setMessage("");
+                setCapture(null);
+                send({ type: "capture-linkedin" });
+              }}
+            >
+              Importar vagas desta tela
+            </button>
+          </div>
+          <p>
+            Na tela de resultados, assuma o controle e importe os links das
+            vagas já carregadas.
+          </p>
+          {capture && (
+            <div className="button-row" role="status">
+              <strong>
+                {capture.created} novas · {capture.found - capture.created} já
+                conhecidas
+              </strong>
+              {openLinkedinImports && (
+                <button
+                  className="secondary"
+                  disabled={openImportsAfterRelease}
+                  onClick={() => {
+                    if (controlled) {
+                      setOpenImportsAfterRelease(true);
+                      send({ type: "release" });
+                    } else {
+                      openLinkedinImports?.();
+                    }
+                  }}
+                >
+                  Ver vagas importadas do LinkedIn
+                </button>
+              )}
+            </div>
+          )}
           <p>
             Se o LinkedIn pedir uma verificação que não conclui aqui, abra a
             busca no seu navegador habitual. A sessão desse navegador serve para

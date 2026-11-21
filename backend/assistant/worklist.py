@@ -8,7 +8,7 @@ from .connectors import CONNECTORS, platform_for
 from .engine import TERMINAL
 from .mail import email_eligible
 from .matching import fingerprint, hard_blocks
-from .models import Profile, Settings
+from .models import LINKEDIN_USER_IMPORTS, Profile, Settings
 
 
 def worklist(profile, settings, jobs):
@@ -61,7 +61,7 @@ def worklist(profile, settings, jobs):
                 "score": a["score"],
                 "confidence": a["confidence"],
                 "destination": destination,
-                "automatic_available": job.get("source") != "linkedin_alert"
+                "automatic_available": job.get("source") not in LINKEDIN_USER_IMPORTS
                 and capabilities.get(destination, {}).get("submission", False)
                 and (
                     not capabilities.get(destination, {}).get("experimental")

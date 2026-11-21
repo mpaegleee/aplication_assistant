@@ -29,9 +29,9 @@ jobs:
         shell: pwsh
         env:
           PYTHONPATH: backend
-        run: ./.venv/Scripts/python.exe packaging/test_upgrade.py windows dist/ApplicationAssistant-Setup-0.6.1-Windows-x64.exe 0.6.1
+        run: ./.venv/Scripts/python.exe packaging/test_upgrade.py windows dist/ApplicationAssistant-Setup-0.6.2-Windows-x64.exe 0.6.2
       - uses: actions/upload-artifact@v4
         with:
-          name: ApplicationAssistant-Windows-0.6.1
-          path: dist/ApplicationAssistant-Setup-0.6.1-Windows-x64.exe
+          name: ApplicationAssistant-Windows-0.6.2
+          path: dist/ApplicationAssistant-Setup-0.6.2-Windows-x64.exe
           retention-days: 14

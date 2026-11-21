@@ -413,6 +413,16 @@ class BrowserManager:
         else:
             raise ValueError("Comando inválido.")
 
+    async def capture_linkedin(self, platform, owner):
+        from .linkedin_capture import capture_visible_jobs
+
+        if platform != "linkedin" or self.leases.get(platform) != owner:
+            raise ValueError("Assuma o controle da aba do LinkedIn antes de importar.")
+        page = self.pages.get(platform)
+        if not page or page.is_closed():
+            raise ValueError("Abra uma página de vagas do LinkedIn antes de importar.")
+        return await capture_visible_jobs(page)
+
     async def discover(self, platform, query, limit, posts=True, source_url=None):
         from .portal_discovery import collect
 
@@ -471,7 +481,11 @@ class BrowserManager:
                     "reason": "Destino externo identificado. Abra o portal correspondente.",
                 }
             handoff = self.handoffs.get(platform)
-            if result["status"] == "pending" and handoff and handoff.get("job_id") == job_id:
+            if (
+                result["status"] == "pending"
+                and handoff
+                and handoff.get("job_id") == job_id
+            ):
                 result = {"status": "handoff", "url": handoff["url"]}
             await self.save(platform)
             return result

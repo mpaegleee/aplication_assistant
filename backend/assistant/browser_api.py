@@ -11,7 +11,7 @@ from pydantic import Field
 from .browser import PORTALS
 from .connectors import platform_for
 from .engine import TERMINAL
-from .models import Model
+from .models import LINKEDIN_USER_IMPORTS, Model
 
 
 class OpenBrowser(Model):
@@ -35,9 +35,10 @@ def install_browser_routes(app, manager, engine, auth):
     @app.post("/api/jobs/{id}/browser/open", dependencies=[Depends(auth)])
     def open_job(id: str):
         job = engine.require_job(id)
-        engine.valid_analysis(job)
         url = job.get("application_url") or job.get("url", "")
         platform = platform_for(url)
+        if job.get("source") not in LINKEDIN_USER_IMPORTS or platform != "linkedin":
+            engine.valid_analysis(job)
         if platform not in PORTALS:
             raise ValueError(
                 "Este site ainda não tem navegador integrado. Use o link externo da vaga."
@@ -140,6 +141,17 @@ def install_browser_routes(app, manager, engine, auth):
                     elif message.get("type") == "file-fields":
                         fields = await call(manager.file_fields(platform, owner))
                         await notify({"file_fields": fields})
+                    elif message.get("type") == "capture-linkedin":
+                        jobs = await call(manager.capture_linkedin(platform, owner))
+                        created = await asyncio.to_thread(
+                            engine.import_linkedin_page_jobs,
+                            jobs,
+                            "LinkedIn · tela aberta",
+                            "visible",
+                        )
+                        await notify(
+                            {"capture": {"found": len(jobs), "created": created}}
+                        )
                     elif message.get("type") == "attach-resume":
                         job_id = str(message.get("job_id", ""))
                         job = engine.require_job(job_id)

@@ -403,6 +403,7 @@ function App() {
     autopilot: "Rotina automática",
     profile: "Meu perfil",
     worklist: "Vagas consolidadas",
+    "linkedin-worklist": "Vagas consolidadas",
     jobs: "Oportunidades",
     "new-job": "Oportunidades",
     applications: "Minhas candidaturas",
@@ -441,7 +442,9 @@ function App() {
               aria-label={label}
               title={label}
               className={
-                page === key || (page === "new-job" && key === "jobs")
+                page === key ||
+                (page === "new-job" && key === "jobs") ||
+                (page === "linkedin-worklist" && key === "worklist")
                   ? "active"
                   : ""
               }
@@ -611,8 +614,12 @@ function App() {
               applications={page === "applications"}
             />
           )}
-          {page === "worklist" && (
+          {(page === "worklist" || page === "linkedin-worklist") && (
             <Worklist
+              key={page}
+              initialTab={
+                page === "linkedin-worklist" ? "linkedin-imports" : "eligible"
+              }
               state={state}
               busy={busy}
               act={act}
@@ -637,6 +644,10 @@ function App() {
               state={state}
               refresh={refresh}
               target={browserTarget}
+              openLinkedinImports={() => {
+                setBrowserTarget(null);
+                setPage("linkedin-worklist");
+              }}
               returnToWorklist={
                 browserTarget
                   ? () => {
@@ -652,7 +663,7 @@ function App() {
         <footer>
           Application Assistant{" "}
           <span>Feito para tornar a busca por emprego mais humana.</span>
-          <span>v0.6.1 · teste local</span>
+          <span>v0.6.2 · teste local</span>
         </footer>
       </div>
       {toast && (
@@ -1180,6 +1191,7 @@ function SetupGuide({
                     refresh={refresh}
                     target={{ platform: selectedPortal, job_id: "" }}
                     fixedPortal
+                    openLinkedinImports={() => go("linkedin-worklist")}
                   />
                 )}
               </>
