@@ -34,6 +34,7 @@ PREVIOUS = {
 }
 PASSWORD = "ci-only-upgrade-password-123"
 AI_KEY = "ci-test-key-never-used-externally"
+PDF_FILENAME = "Perfil de teste.pdf"
 
 
 def previous_package(platform, root):
@@ -154,7 +155,7 @@ def write_test_data(client):
     document = stream.getvalue()
     client.post(
         "/api/profile/pdf",
-        files={"file": ("Perfil de teste.pdf", document, "application/pdf")},
+        files={"file": (PDF_FILENAME, document, "application/pdf")},
     ).raise_for_status()
     client.put(
         "/api/profile", json={"name": "Pessoa Teste", "email": "qa@example.com"}
@@ -208,7 +209,7 @@ def verify_upgrade(platform, package, version, root):
         assert state["settings"]["ai_key_configured"]
         assert state["settings"]["ai_model"] == "preservar-modelo"
         assert state["settings"]["ai_key"] == ""
-        assert state["pdf_filename"] == "Curriculo.pdf"
+        assert state["pdf_filename"] == PDF_FILENAME
         assert client.get("/api/profile/pdf").raise_for_status().content == document
         saved_job = next(row for row in state["jobs"] if row["id"] == job_id)
         assert saved_job["status"] == "interview"
