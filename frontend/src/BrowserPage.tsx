@@ -230,6 +230,63 @@ export function BrowserPage({
           Apagar sessão local
         </button>
       </div>
+      {platform === "gupy" && (
+        <div className="notice">
+          <h3>Preparar minha conta Gupy</h3>
+          <div className="button-row">
+            <button
+              disabled={busy || controlled}
+              onClick={() =>
+                action(() =>
+                  api("/browser/open", "POST", {
+                    platform,
+                    url: "https://login.gupy.io/candidates/signup",
+                  }),
+                )
+              }
+            >
+              Abrir cadastro Gupy
+            </button>
+            <button
+              disabled={!controlled || !state.profile.confirmed}
+              onClick={() => {
+                setMessage("");
+                send({ type: "gupy-fill-signup" });
+              }}
+            >
+              Preencher com meu perfil
+            </button>
+            <button
+              disabled={busy || controlled}
+              onClick={() =>
+                action(() =>
+                  api("/browser/open", "POST", {
+                    platform,
+                    url: "https://portal.gupy.io/candidates/resume",
+                  }),
+                )
+              }
+            >
+              Abrir Meu currículo
+            </button>
+            <button
+              disabled={!controlled || !state.profile.confirmed}
+              onClick={() => {
+                setMessage("");
+                send({ type: "gupy-import-resume" });
+              }}
+            >
+              Enviar currículo base para preenchimento
+            </button>
+          </div>
+          <p>
+            Confirme seu perfil no Application Assistant e assuma o controle da
+            página. Use os dados salvos para preencher o cadastro. Para montar
+            o currículo, entre na Gupy, abra a opção de importar um arquivo e
+            envie o PDF gerado com seus fatos confirmados.
+          </p>
+        </div>
+      )}
       {platform === "linkedin" && (
         <div className="notice">
           <div className="button-row">

@@ -10,7 +10,9 @@ Assistente gratuito e de código aberto para organizar a busca por emprego no Br
 
 O currículo destaca e ordena fatos confirmados do perfil; a IA não cria certificações ou experiências para aumentar a aderência.
 
-## Versão 0.6.2
+## Versão 0.6.3
+
+A Gupy é pesquisada sem login, por cargos do perfil. Para preparar a conta, a aplicação preenche os campos reconhecidos do cadastro e envia o currículo base ao importador da Gupy.
 
 Abra uma busca do LinkedIn no Chromium da aplicação e use **Importar vagas desta tela** para consolidar os resultados carregados. A coleta por e-mail está documentada no [guia de alertas](docs/ALERTAS-LINKEDIN.md).
 
@@ -21,7 +23,7 @@ A configuração guiada reúne IA, perfil, fontes, sessões e coleta de teste. O
 A rotina recupera o horário perdido no mesmo dia, alterna vagas já processadas e acompanha links de candidatura para Gupy e InHire. A área Projetos e Agilidade reconhece cargos como Scrum Master e PMO. É possível autorizar de uma vez o compartilhamento com empresas dos portais selecionados.
 
 - Fila **Vagas consolidadas**, filtros, descrição de publicações, currículo por posição e histórico.
-- Fontes RSS/JSON/JobPosting, Greenhouse e Lever; busca experimental no navegador em LinkedIn (vagas e publicações), Indeed e páginas Gupy configuradas pelo usuário.
+- Fontes RSS/JSON/JobPosting, Greenhouse e Lever; busca experimental no navegador em LinkedIn (vagas e publicações), Indeed, além da busca pública da Gupy por cargo.
 - Navegador Chromium próprio, sessões criptografadas, transição entre portais conhecidos e anexo manual sem extensão do navegador pessoal.
 - SMTP TLS; InHire direto; formulários de múltiplas etapas experimentais em LinkedIn, Gupy e Indeed. Os formulários experimentais começam **desabilitados** e só atuam em controles reconhecidos, com respostas exatas e currículo novo.
 - Sessão vencida, CAPTCHA, criação de conta, botão ambíguo e perguntas desconhecidas geram pendência. Não existe automação universal de qualquer site. Um resultado incerto nunca é repetido automaticamente.
@@ -35,13 +37,13 @@ Os downloads ficam em [GitHub Releases](https://github.com/mpaegleee/aplication_
 
 | Sistema | Arquivo | Como usar |
 |---|---|---|
-| Windows 10/11 x64 | `ApplicationAssistant-Setup-0.6.2-Windows-x64.exe` | Executar o instalador e abrir pelo atalho |
-| Linux x64 | `ApplicationAssistant-0.6.2-Linux-x64.tar.gz` | Extrair e executar `./Iniciar.sh`; `./Instalar.sh` cria o atalho |
-| Desenvolvimento | `ApplicationAssistant-Codigo-0.6.2.zip` | Código, testes e scripts de build |
+| Windows 10/11 x64 | `ApplicationAssistant-Setup-0.6.3-Windows-x64.exe` | Executar o instalador e abrir pelo atalho |
+| Linux x64 | `ApplicationAssistant-0.6.3-Linux-x64.tar.gz` | Extrair e executar `./Iniciar.sh`; `./Instalar.sh` cria o atalho |
+| Desenvolvimento | `ApplicationAssistant-Codigo-0.6.3.zip` | Código, testes e scripts de build |
 
 Python, driver e Chromium acompanham os pacotes de uso. No Linux, bibliotecas de sistema do Chromium ainda podem ser necessárias. O computador deve permanecer ligado, sem suspensão, com o processo aberto. Para servidor próprio, há instalação Docker.
 
-- [Guia da versão: fila manual, rotina, busca em posts e limitações](docs/ATUALIZACAO-0.6.2.md)
+- [Guia da versão e preparação da conta Gupy](docs/ATUALIZACAO-0.6.3.md)
 - [Configuração para usuários](docs/GUIA-DO-USUARIO.md)
 - [Instalar no Linux](docs/LINUX.md)
 - [Verificação e testes](docs/VERIFICACAO.md)

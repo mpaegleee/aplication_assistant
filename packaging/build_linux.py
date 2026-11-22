@@ -23,7 +23,7 @@ def main():
             "--runtime precisa apontar para uma instalação portátil completa, fora do ambiente virtual."
         )
     root = Path(__file__).resolve().parents[1]
-    output = root / "dist/ApplicationAssistant-0.6.2-Linux-x64.tar.gz"
+    output = root / "dist/ApplicationAssistant-0.6.3-Linux-x64.tar.gz"
     output.parent.mkdir(exist_ok=True)
     prefix = "ApplicationAssistant-Linux"
 
@@ -87,7 +87,7 @@ printf 'Instalado em %s. Abra Application Assistant no menu ou execute Iniciar.s
         scripts["build-manifest.json"] = (
             json.dumps(
                 {
-                    "version": "0.6.2",
+                    "version": "0.6.3",
                     "target": "linux-x64",
                     "runtime": args.runtime.name,
                     "browser": "chromium-1255",

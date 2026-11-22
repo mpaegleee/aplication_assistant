@@ -14,7 +14,7 @@ from .store import now
 
 PORTALS = {
     "linkedin": ("https://www.linkedin.com/login", ("linkedin.com",)),
-    "gupy": ("https://login.gupy.io/candidate/signin", ("gupy.io",)),
+    "gupy": ("https://login.gupy.io/candidates/signin", ("gupy.io",)),
     "indeed": ("https://br.indeed.com/", ("indeed.com", "indeed.com.br")),
     "inhire": ("", ("inhire.app",)),
     "greenhouse": ("", ("greenhouse.io",)),
@@ -412,6 +412,28 @@ class BrowserManager:
             )
         else:
             raise ValueError("Comando inválido.")
+
+    async def prepare_gupy_profile(self, platform, owner, action, profile):
+        from .documents import resume_pdf
+        from .gupy_setup import fill_signup, import_resume
+
+        if platform != "gupy" or self.leases.get(platform) != owner:
+            raise ValueError("Assuma o controle da aba da Gupy antes de preencher.")
+        page = self.pages.get(platform)
+        if not page or page.is_closed():
+            raise ValueError("Abra o cadastro ou o currículo da Gupy primeiro.")
+        if not profile.get("confirmed"):
+            raise ValueError(
+                "Confirme seu perfil no Application Assistant antes de preencher."
+            )
+        if action == "gupy-fill-signup":
+            return await fill_signup(page, profile)
+        pdf = await asyncio.to_thread(
+            resume_pdf,
+            profile,
+            {"resume_fact_ids": [fact["id"] for fact in profile["facts"]]},
+        )
+        return await import_resume(page, pdf)
 
     async def capture_linkedin(self, platform, owner):
         from .linkedin_capture import capture_visible_jobs

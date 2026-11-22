@@ -141,7 +141,7 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
 
     app = FastAPI(
         title="Application Assistant",
-        version="0.6.2",
+        version="0.6.3",
         lifespan=lifespan,
         docs_url=None,
         redoc_url=None,
@@ -273,7 +273,7 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
 
     @app.get("/api/health")
     def health():
-        return {"ok": True, "version": "0.6.2"}
+        return {"ok": True, "version": "0.6.3"}
 
     @app.get("/api/session")
     def session(request: Request):
@@ -327,7 +327,7 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
             }
         )
         return {
-            "version": "0.6.2",
+            "version": "0.6.3",
             "profile": engine.profile(),
             "settings": settings,
             "jobs": jobs,

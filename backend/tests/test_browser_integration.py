@@ -586,3 +586,92 @@ def test_linkedin_capture_adds_only_loaded_links_and_preserves_original(
     assert updated["country"] == "BR" and updated["modality"] == "Remoto"
     assert updated["analysis"] is None
     assert len(visited) == 2
+
+
+def test_gupy_setup_fills_profile_and_uses_native_resume_import(app, client, profile):
+    import json
+
+    manager = app.state.engine.browser
+    profile.update(
+        phone="+55 11 98765-4321",
+        answers=[{"question": "Data de nascimento", "answer": "03/04/1995"}],
+    )
+    app.state.store.put("profile", profile)
+    signup = "https://login.gupy.io/candidates/signup"
+    resume = "https://portal.gupy.io/candidates/resume"
+    signup_html = """<form onsubmit="throw Error('must not submit')">
+        <label>Nome completo<input name="name"></label>
+        <label>E-mail<input name="email" type="email" value="editado@example.com"></label>
+        <label>Confirme o e-mail<input name="confirmation" type="email"></label>
+        <label>Número de celular<input name="phone" type="tel"></label>
+        <label>Data de nascimento<input name="birth" type="date"></label>
+        <label>CPF<input name="cpf"></label>
+        <label>Senha<input name="password" type="password"></label>
+        <label>Termos de uso<input name="terms" type="checkbox"></label>
+        <button>Criar conta</button></form>"""
+    resume_html = """<div class="curriculum-upload">
+        <button onclick="document.querySelector('input').click()">Buscar arquivo</button>
+        <input type="file" hidden></div>"""
+
+    async def setup():
+        context = await manager.context("gupy")
+        await context.route(
+            "https://**.gupy.io/**",
+            lambda route: route.fulfill(
+                content_type="text/html; charset=utf-8",
+                body=signup_html if route.request.url == signup else resume_html,
+            ),
+        )
+        await manager.open("gupy", signup)
+
+    manager.call(setup())
+    with client.websocket_connect(
+        "/api/browser/gupy/view", headers={"origin": "http://testserver"}
+    ) as ws:
+
+        def command(kind):
+            ws.send_json({"type": kind})
+            for _ in range(20):
+                item = ws.receive()
+                if item.get("text"):
+                    return json.loads(item["text"])
+            pytest.fail("Missing browser response")
+
+        assert "Assuma" in command("gupy-fill-signup")["error"]
+        assert command("acquire")["controlled"]
+        assert "4" in command("gupy-fill-signup")["notice"]
+
+        async def values():
+            return (
+                await manager.pages["gupy"]
+                .locator("input")
+                .evaluate_all(
+                    "fields => fields.map(e => e.type === 'checkbox' ? e.checked : e.value)"
+                )
+            )
+
+        assert manager.call(values()) == [
+            profile["name"],
+            "editado@example.com",
+            "editado@example.com",
+            "11987654321",
+            "1995-04-03",
+            "",
+            "",
+            False,
+        ]
+        assert "Meu currículo" in command("gupy-import-resume")["error"]
+        assert not command("release")["controlled"]
+        manager.call(manager.open("gupy", resume))
+        assert command("acquire")["controlled"]
+        assert "PDF enviado" in command("gupy-import-resume")["notice"]
+
+        async def uploaded():
+            return (
+                await manager.pages["gupy"]
+                .locator("input")
+                .evaluate("async e => (await e.files[0].text()).slice(0, 5)")
+            )
+
+        assert manager.call(uploaded()) == "%PDF-"
+        assert not command("release")["controlled"]

@@ -1206,7 +1206,7 @@ function SetupGuide({
           </section>
           {gupyDestination && (
             <details>
-              <summary>Entrar na Gupy para candidaturas</summary>
+              <summary>Preparar conta Gupy para candidaturas</summary>
               <p>
                 Esta conexão é opcional durante a configuração e a busca. Para
                 candidaturas pelo navegador interno, entre na Gupy e use Salvar

@@ -141,6 +141,17 @@ def install_browser_routes(app, manager, engine, auth):
                     elif message.get("type") == "file-fields":
                         fields = await call(manager.file_fields(platform, owner))
                         await notify({"file_fields": fields})
+                    elif message.get("type") in (
+                        "gupy-fill-signup",
+                        "gupy-import-resume",
+                    ):
+                        profile = await asyncio.to_thread(engine.profile)
+                        notice = await call(
+                            manager.prepare_gupy_profile(
+                                platform, owner, message["type"], profile
+                            )
+                        )
+                        await notify({"notice": notice})
                     elif message.get("type") == "capture-linkedin":
                         jobs = await call(manager.capture_linkedin(platform, owner))
                         created = await asyncio.to_thread(

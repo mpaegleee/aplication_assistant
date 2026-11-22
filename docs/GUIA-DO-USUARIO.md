@@ -1,6 +1,6 @@
 # Guia do usuário — Application Assistant
 
-Para fila manual, busca em publicações, automação e instaladores Windows/Linux, consulte **ATUALIZACAO-0.6.2.md**. Os guias 0.2 e 0.3 descrevem versões anteriores; o guia da versão 0.6.2 explica a configuração, a coleta e a atualização.
+Para fila manual, busca em publicações, automação e instaladores Windows/Linux, consulte **ATUALIZACAO-0.6.3.md**. Os guias 0.2 e 0.3 descrevem versões anteriores; o guia da versão 0.6.3 explica a configuração, a coleta e a atualização.
 
 ## Para que serve
 Organizar sua busca de emprego no Brasil, comparar vagas com seu perfil, preparar currículos e acompanhar candidaturas. Uma pessoa por instalação. O programa é gratuito; serviços de IA escolhidos por você podem cobrar pelo uso.
@@ -50,6 +50,8 @@ Autorize domínios exatos em Configurações → Fontes. Adicione feeds RSS ou J
 Por padrão, itens importados exigem revisão da área. Em Rotina automática, a classificação por regras de cargo pode ser habilitada; casos ambíguos continuam pendentes. RSS pode não trazer empresa, modalidade ou descrição completa; complete esses dados. Use a importação manual quando o site não expuser formato suportado.
 
 **Gupy.** Marque Gupy em **Rotina automática → Onde pesquisar**. A coleta consulta o portal público por até três cargos do seu perfil, na ordem em que aparecem. Se você preencher **Termos da busca nos portais**, a rotina usa esses termos. A lista respeita o período configurado, consolida os anúncios com descrição completa e usa os requisitos do anúncio para avaliar a aderência. A busca dispensa conta. [Portal de vagas da Gupy](https://portal.gupy.io/job-search/sortBy=publishedDate)
+
+Para preparar a conta, confirme primeiro o seu perfil no Application Assistant. Em **Navegador e sessões → Gupy**, use **Abrir cadastro Gupy**, **Assumir controle** e **Preencher com meu perfil**. A aplicação preenche os campos reconhecidos e em branco com os dados já salvos. Você confirma a criação da conta e atende às solicitações de senha, termos e verificação da Gupy. Quando estiver logado, abra **Meu currículo** e use **Enviar currículo base para preenchimento** na tela de importação da Gupy. A plataforma recebe um PDF gerado com os fatos confirmados do perfil. Revise o resultado do importador e salve no portal.
 
 Para se candidatar manualmente, prepare o currículo na vaga consolidada, abra a página original e entre na sua conta Gupy. Conclua as etapas da empresa e registre o envio na aplicação. Para usar o preenchimento automático experimental, entre antes em **Navegador e sessões → Gupy**, salve a sessão e habilite a Gupy como destino. O envio depende das autorizações, das etapas reconhecidas e das respostas salvas. Login, verificações e etapas que exigem intervenção ficam pendentes. O aplicativo só registra o envio pelo conector quando reconhece a confirmação do portal.
 

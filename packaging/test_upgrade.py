@@ -1,4 +1,4 @@
-"""Install the published 0.6.1, create test data, then install the new package over it."""
+"""Install the published 0.6.2, create test data, then install the new package over it."""
 
 import argparse
 import hashlib
@@ -21,15 +21,15 @@ from assistant.history import record_stage
 from assistant.store import Store
 from reportlab.pdfgen.canvas import Canvas
 
-BASE = "https://github.com/mpaegleee/aplication_assistant/releases/download/v0.6.1/"
+BASE = "https://github.com/mpaegleee/aplication_assistant/releases/download/v0.6.2/"
 PREVIOUS = {
     "windows": (
-        "ApplicationAssistant-Setup-0.6.1-Windows-x64.exe",
-        "ea156d0a4b7f584897013dcc19f3171c38ac66b367ffce02d9b3173b0b7fa74e",
+        "ApplicationAssistant-Setup-0.6.2-Windows-x64.exe",
+        "d7c1dd54516a3d7c3cf9795aff9f097c439fd5c687d36c14857e597e683c350c",
     ),
     "linux": (
-        "ApplicationAssistant-0.6.1-Linux-x64.tar.gz",
-        "cc17606d7ccdf9a3e0249b4953f8f5fa83476460e25f05928cac7d2f5026358b",
+        "ApplicationAssistant-0.6.2-Linux-x64.tar.gz",
+        "d3b9d33ef08159eb46b2fb75e67056b9d0599f1d271d6f66f44886acfba40c6b",
     ),
 }
 PASSWORD = "ci-only-upgrade-password-123"
@@ -192,7 +192,7 @@ def verify_upgrade(platform, package, version, root):
     # Point the installed app at its own bundled Chromium.
     env.pop("PLAYWRIGHT_BROWSERS_PATH", None)
     launcher = install(platform, prior, root, env)
-    with app_session([str(launcher)], env, "0.6.1", root / "old.log") as client:
+    with app_session([str(launcher)], env, "0.6.2", root / "old.log") as client:
         job_id, document = write_test_data(client)
     store = Store(data)
     job = store.get("jobs", job_id)
@@ -222,7 +222,7 @@ def verify_upgrade(platform, package, version, root):
     assert (data / "vault.key").read_bytes() == original_key
     assert Store(data).get("settings")["ai_key"] == AI_KEY
     print(
-        f"Upgrade 0.6.1 to {version} ({platform}): password, key, PDF, profile, application and history preserved."
+        f"Upgrade 0.6.2 to {version} ({platform}): password, key, PDF, profile, application and history preserved."
     )
 
 
