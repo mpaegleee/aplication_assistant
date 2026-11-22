@@ -319,7 +319,7 @@ def create_app(directory=None, static_dir=None, enable_scheduler=True):
         pdf = store.get("pdf", default={})
         search_platforms = set(settings["search_platforms"])
         configured_sources = sorted(
-            (search_platforms & {"linkedin", "indeed"})
+            (search_platforms & {"linkedin", "indeed", "gupy"})
             | {
                 source_platform(source)
                 for source in settings["sources"]

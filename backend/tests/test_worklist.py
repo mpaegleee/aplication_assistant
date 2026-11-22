@@ -450,3 +450,85 @@ def test_one_connected_portal_is_enough_to_collect(
     assert checked == ["linkedin"]
     assert run["found"] == 1 and run["sent"] == 0 and run["status"] == "completed"
     assert len(run["errors"]) == 1 and "Indeed" in run["errors"][0]
+
+
+def test_public_gupy_collects_profile_matches_without_browser_session(
+    app, client, profile, settings, analysis, monkeypatch
+):
+    import json
+    from datetime import date, timedelta
+    from urllib.parse import unquote
+
+    profile["roles"] = ["Desenvolvedor Python"]
+    settings.update(
+        mode="automatic",
+        search_platforms=["gupy"],
+        allowed_destinations=["gupy"],
+        sources=[],
+        auto_classify_areas=True,
+        max_job_age_days=15,
+    )
+    app.state.store.put("profile", profile)
+    app.state.store.put("settings", settings)
+    assert client.get("/api/state").json()["configured_sources"] == ["gupy"]
+    today = date.today()
+    job_url = "https://empresa.gupy.io/jobs/123"
+    cards = [
+        {
+            "jobUrl": job_url,
+            "publishedDate": today.isoformat(),
+            "workplaceType": "remote",
+        },
+        {
+            "jobUrl": "https://empresa.gupy.io/jobs/456",
+            "publishedDate": (today - timedelta(days=20)).isoformat(),
+        },
+    ]
+    posting = {
+        "id": 123,
+        "status": "published",
+        "name": "Desenvolvedor Python",
+        "description": "<p>Desenvolver APIs em Python em equipe.</p>",
+        "prerequisites": "<p>Experiência com APIs REST.</p>",
+        "careerPage": {"name": "Empresa Teste"},
+        "addressCountryShortName": "BR",
+    }
+
+    def page(props):
+        return (
+            '<script id="__NEXT_DATA__" type="application/json">'
+            + json.dumps({"props": {"pageProps": props}})
+            + "</script>"
+        )
+
+    def fetch(url, allowed):
+        if url.startswith("https://portal.gupy.io/"):
+            assert "term=Desenvolvedor Python&sortBy=publishedDate" in unquote(url)
+            assert allowed == ["portal.gupy.io"]
+            return page(
+                {
+                    "searchFilters": {"term": "Desenvolvedor Python"},
+                    "initialJobList": {
+                        "data": cards,
+                        "pagination": {"total": 2, "limit": 12, "offset": 0},
+                    },
+                }
+            )
+        assert url == job_url and allowed == ["empresa.gupy.io"]
+        return page({"job": posting})
+
+    monkeypatch.setattr("assistant.gupy.public_fetch", fetch)
+    monkeypatch.setattr(AI, "analyze", lambda *args: copy.deepcopy(analysis))
+    monkeypatch.setattr(
+        app.state.engine,
+        "browser_apply",
+        lambda *a, **kw: pytest.fail("Sent from collection"),
+    )
+    app.state.engine.run("collect")
+    run = app.state.store.all("runs")[0]
+    assert run["found"] == 2 and run["skipped_age"] == 1
+    assert run["imported"] == run["eligible"] == 1 and not run["errors"]
+    saved = app.state.store.all("jobs")[0]
+    assert saved["url"] == job_url and saved["modality"] == "Remoto"
+    assert saved["destination"] == "gupy" and saved["country"] == "BR"
+    assert "Experiência com APIs REST." in saved["description"]

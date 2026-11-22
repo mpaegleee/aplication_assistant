@@ -49,7 +49,11 @@ Autorize domínios exatos em Configurações → Fontes. Adicione feeds RSS ou J
 
 Por padrão, itens importados exigem revisão da área. Em Rotina automática, a classificação por regras de cargo pode ser habilitada; casos ambíguos continuam pendentes. RSS pode não trazer empresa, modalidade ou descrição completa; complete esses dados. Use a importação manual quando o site não expuser formato suportado.
 
-**A busca no navegador em LinkedIn/Indeed e páginas Gupy é experimental; veja o guia 0.5.** Prepare a candidatura, abra o link, finalize no portal e registre o envio. O navegador interno permite login manual e mantém a sessão local criptografada; os formulários reconhecidos podem ser enviados automaticamente conforme as autorizações e respostas configuradas. O LinkedIn restringe automação; APIs de candidatura da Gupy usam acessos de empresas, não uma conta comum de candidato.
+**Gupy.** Marque Gupy em **Rotina automática → Onde pesquisar**. A coleta consulta o portal público por até três cargos do seu perfil, na ordem em que aparecem. Se você preencher **Termos da busca nos portais**, a rotina usa esses termos. A lista respeita o período configurado, consolida os anúncios com descrição completa e usa os requisitos do anúncio para avaliar a aderência. A busca dispensa conta. [Portal de vagas da Gupy](https://portal.gupy.io/job-search/sortBy=publishedDate)
+
+Para se candidatar manualmente, prepare o currículo na vaga consolidada, abra a página original e entre na sua conta Gupy. Conclua as etapas da empresa e registre o envio na aplicação. Para usar o preenchimento automático experimental, entre antes em **Navegador e sessões → Gupy**, salve a sessão e habilite a Gupy como destino. O envio depende das autorizações, das etapas reconhecidas e das respostas salvas. Login, verificações e etapas que exigem intervenção ficam pendentes. O aplicativo só registra o envio pelo conector quando reconhece a confirmação do portal.
+
+A busca no navegador em LinkedIn e Indeed é experimental. O navegador interno mantém a sessão local criptografada. Os formulários reconhecidos podem ser enviados automaticamente conforme as autorizações e respostas configuradas.
 
 ## Candidaturas por e-mail
 Configure o servidor SMTP com TLS direto (normalmente porta 465) ou STARTTLS (normalmente 587), remetente, usuário e senha de aplicativo. Use as instruções do seu provedor. Alguns provedores exigem OAuth, ainda não disponível. Nunca desative TLS para fazer funcionar.

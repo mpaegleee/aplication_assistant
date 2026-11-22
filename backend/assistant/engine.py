@@ -18,6 +18,7 @@ from .connectors import CONNECTORS, platform_for, source_platform, source_addres
 from .history import record_stage
 from .job_dates import outside_window
 from .portal_discovery import PortalAccessRequired
+from .gupy import public_cards, public_posting
 
 TERMINAL = {
     "sent",
@@ -733,6 +734,79 @@ class Engine:
             except ValueError as exc:
                 run["errors"].append("Publicação/vaga pendente: " + str(exc)[:350])
 
+    def collect_public_gupy(self, queries, settings, run, seen, interrupted):
+        if not queries:
+            run["errors"].append(
+                "Gupy: informe os cargos no perfil ou termos de busca."
+            )
+            return
+
+        def finished():
+            return interrupted() or len(seen) >= settings["max_jobs_per_run"]
+
+        inspected = set()
+        for query in dict.fromkeys(queries):
+            if finished():
+                break
+            entry = {
+                "name": "Gupy: " + query,
+                "platform": "gupy",
+                "found": 0,
+                "new": 0,
+                "duplicates": 0,
+                "status": "running",
+            }
+            run["sources"].append(entry)
+            unavailable = 0
+            try:
+                for card in public_cards(query, finished):
+                    if finished():
+                        break
+                    identity = application_identity(card["url"])
+                    if identity in inspected:
+                        continue
+                    inspected.add(identity)
+                    entry["found"] += 1
+                    run["found"] += 1
+                    if self.age_check(card, settings):
+                        run["skipped_age"] += 1
+                        continue
+                    try:
+                        data = public_posting(card)
+                    except (OSError, ValueError):
+                        unavailable += 1
+                        continue
+                    if self.age_check(data, settings, require_date=True):
+                        run["skipped_age"] += 1
+                        continue
+                    job, created = self.add_job(
+                        data,
+                        {
+                            "url": data["url"],
+                            "platform": "gupy",
+                            "source": entry["name"],
+                        },
+                    )
+                    seen.add(job["id"])
+                    entry["new"] += int(created)
+                    entry["duplicates"] += int(not created)
+                    run["imported"] += int(created)
+                    run["duplicates"] += int(not created)
+                entry["status"] = "pending" if unavailable else "completed"
+            except OSError:
+                entry["status"] = "pending"
+                run["errors"].append(
+                    "Gupy: não foi possível conectar ao portal público."
+                )
+            except ValueError as exc:
+                entry["status"] = "pending"
+                run["errors"].append("Gupy: " + str(exc)[:350])
+            if unavailable:
+                run["errors"].append(
+                    f"{entry['name']}: {unavailable} vaga(s) sem descrição completa acessível."
+                )
+            self.store.put("runs", run, run["id"])
+
     def run(self, action="apply"):
         manual_collection = action == "collect"
         collect_only = manual_collection or self.settings()["mode"] == "manual"
@@ -776,7 +850,14 @@ class Engine:
                         + capabilities[platform]["reason"]
                     )
             seen = set()
-            queries = settings["browser_search_queries"] or self.profile()["roles"][:3]
+            queries = (
+                settings["browser_search_queries"]
+                or [role.strip() for role in self.profile()["roles"] if role.strip()][
+                    :3
+                ]
+            )
+            if "gupy" in settings["search_platforms"]:
+                self.collect_public_gupy(queries, settings, run, seen, interrupted)
             for platform in ("linkedin", "indeed"):
                 if platform not in settings["search_platforms"]:
                     continue

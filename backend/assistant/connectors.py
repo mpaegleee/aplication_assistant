@@ -63,7 +63,7 @@ CONNECTORS = [
         "discovery": True,
         "submission": True,
         "experimental": True,
-        "reason": "Leitura experimental de páginas de empresas configuradas como fontes; formulário de candidatura experimental, sem criação automática de conta.",
+        "reason": "Busca pública pelos cargos do perfil ou termos configurados. A candidatura usa uma conta Gupy; o preenchimento automático é experimental.",
     },
     {
         "id": "indeed",

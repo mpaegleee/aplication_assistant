@@ -119,7 +119,7 @@ export function AutomationPanel({ state, act, busy, go, setup }: Props) {
       "Envio de e-mail habilitado",
       s.email_enabled && s.allowed_destinations.includes("email"),
     ],
-    ["Fonte de busca cadastrada", s.sources.some((x) => x.enabled)],
+    ["Fonte de busca habilitada", !!state.configured_sources?.length],
     ["Agenda habilitada", s.schedule_enabled],
     ["Rotina sem pausa", !s.paused],
   ] as const;
@@ -261,7 +261,8 @@ export function AutomationPanel({ state, act, busy, go, setup }: Props) {
           <h3>Termos da busca nos portais</h3>
           <label className="field">
             <span>
-              Um cargo ou expressão por linha; vazio usa os cargos do perfil
+              Um cargo ou expressão por linha. Em branco, a busca usa os três
+              primeiros cargos do perfil.
             </span>
             <textarea
               value={s.browser_search_queries.join("\n")}
@@ -317,8 +318,8 @@ export function AutomationPanel({ state, act, busy, go, setup }: Props) {
           )}
           <p>
             O LinkedIn pode usar alertas do e-mail ou o navegador interno. O
-            Indeed usa o navegador e a sessão salva. A Gupy lê as páginas de
-            empresas cadastradas como fontes.
+            Indeed usa o navegador e a sessão salva. A Gupy pesquisa no portal
+            público sem exigir conta. Para se candidatar, entre na Gupy.
           </p>
           <h3>Onde pesquisar</h3>
           {state.connectors

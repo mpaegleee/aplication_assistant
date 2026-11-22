@@ -952,6 +952,7 @@ function SetupGuide({
       source === "indeed" ||
       (source === "linkedin" && settings.linkedin_search_method !== "email"),
   );
+  const gupyDestination = settings.allowed_destinations.includes("gupy");
   const portalIssues = state.search_portal_issues || {};
   const missingSessions = portals.filter((portal) =>
     Boolean(portalIssues[portal]),
@@ -1154,7 +1155,13 @@ function SetupGuide({
       {step === 3 && (
         <>
           <section className="panel">
-            <h3>Conecte as contas usadas na busca</h3>
+            <h3>Conecte as contas dos portais</h3>
+            {sources.includes("gupy") && (
+              <p>
+                A busca da Gupy usa o portal público. Entre na sua conta Gupy
+                pelo menu Navegador e sessões quando for se candidatar.
+              </p>
+            )}
             {portals.length === 0 ? (
               <p>
                 As fontes selecionadas nesta configuração não exigem login no
@@ -1184,7 +1191,7 @@ function SetupGuide({
                     </button>
                   ))}
                 </div>
-                {selectedPortal && (
+                {selectedPortal && !(gupyDestination && loginPortal === "gupy") && (
                   <BrowserPage
                     key={selectedPortal}
                     state={state}
@@ -1197,6 +1204,29 @@ function SetupGuide({
               </>
             )}
           </section>
+          {gupyDestination && (
+            <details>
+              <summary>Entrar na Gupy para candidaturas</summary>
+              <p>
+                Esta conexão é opcional durante a configuração e a busca. Para
+                candidaturas pelo navegador interno, entre na Gupy e use Salvar
+                sessão e liberar controle.
+              </p>
+              {loginPortal === "gupy" ? (
+                <BrowserPage
+                  key="gupy"
+                  state={state}
+                  refresh={refresh}
+                  target={{ platform: "gupy", job_id: "" }}
+                  fixedPortal
+                />
+              ) : (
+                <button type="button" onClick={() => setLoginPortal("gupy")}>
+                  Configurar sessão Gupy
+                </button>
+              )}
+            </details>
+          )}
           {useLinkedInAlerts && (
             <section className="panel">
               <h3>Caixa de alertas do LinkedIn</h3>
